@@ -1,4 +1,5 @@
 import React from 'react';
+import { colors } from '../styles/colors';
 
 interface StatusBadgeProps {
   status: 'active' | 'inactive' | 'processing';
@@ -7,17 +8,17 @@ interface StatusBadgeProps {
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   const statusConfig = {
     active: {
-      bg: 'bg-emerald-50',
-      border: 'border-emerald-200',
-      dot: 'bg-emerald-500',
-      text: 'text-emerald-700',
+      bg: colors.success[50],
+      border: colors.success.border,
+      dot: colors.success[500],
+      text: colors.success.text,
       label: 'Agent Active'
     },
     inactive: {
-      bg: 'bg-slate-50',
-      border: 'border-slate-200',
-      dot: 'bg-slate-400',
-      text: 'text-slate-700',
+      bg: colors.neutral[50],
+      border: colors.neutral.border,
+      dot: colors.neutral[400],
+      text: colors.neutral.text,
       label: 'Agent Offline'
     },
     processing: {

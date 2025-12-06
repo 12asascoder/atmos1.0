@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import MessageBubble from '../components/MessageBubble';
 import QuickAction from '../components/QuickAction';
 import ChatInput from '../components/ChatInput';
+import { colors } from '../styles/colors';
 
 interface Message {
   id: number;
@@ -55,7 +56,7 @@ const CommandCenter: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className={`min-h-screen ${colors.background.gradient}`}>
       <Navigation />
       
       <div className="max-w-7xl mx-auto">
@@ -63,7 +64,7 @@ const CommandCenter: React.FC = () => {
         
         {/* Main Content */}
         <div className="px-6 py-6">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" 
+          <div className={`${colors.background.card} rounded-2xl ${colors.neutral.border} border shadow-sm overflow-hidden`} 
                style={{ height: 'calc(100vh - 240px)' }}>
             <div className="h-full flex flex-col">
               {/* Messages */}
@@ -74,8 +75,8 @@ const CommandCenter: React.FC = () => {
               </div>
 
               {/* Quick Actions */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
-                <p className="text-xs font-medium text-slate-500 mb-3">Quick actions:</p>
+              <div className={`px-6 py-4 ${colors.neutral.borderLight} border-t ${colors.neutral[50]}/50`}>
+                <p className={`text-xs font-medium ${colors.neutral.textLight} mb-3`}>Quick actions:</p>
                 <div className="grid grid-cols-4 gap-2">
                   {quickActions.map((action, idx) => (
                     <QuickAction
