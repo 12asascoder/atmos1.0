@@ -152,3 +152,94 @@ backend/
 │   └── test_ads.py
 ├── requirements.txt / pyproject.toml
 └── .env.example
+
+
+
+## We’ll make competitor management work end‑to‑end:
+
+POST /api/v1/competitors → add competitor
+
+GET /api/v1/competitors → list competitors
+
+DELETE /api/v1/competitors/{id} → delete competitor
+
+Stack: FastAPI + SQLAlchemy + Postgres (Supabase)
+
+## app/core/config.py - Read your DB connection string from .env so you don’t hardcode passwords.
+
+## app/core/database.py
+👉 Simple idea:
+
+engine = connection to database
+
+SessionLocal = “open a tab” to DB
+
+Base = parent for all DB models
+
+get_db() = FastAPI’s way to give you a DB session inside your endpoints.
+
+## app/models/competitor.py -  DB table model
+👉 Simple idea:
+This class = one row in competitors table.
+Fields match what we discussed: domain, brand name, social handles, etc.
+
+## app/schemas/competitor.py – Request/Response shapes
+👉 Simple idea:
+
+CompetitorCreate = data your frontend sends when adding a competitor
+
+CompetitorResponse = data your API sends back
+
+Keeps request/responses clean and typed.
+
+## app/services/competitor_service.py – business logic
+
+👉 Simple idea:
+These functions are your “logic layer”:
+
+create_competitor – puts a new competitor row into DB
+
+list_competitors – returns all competitors (optionally filtered by user)
+
+delete_competitor – removes a competitor row
+
+## app/api/v1/competitors.py – FastAPI endpoints
+👉 Simple idea in words:
+
+POST /competitors
+
+Input: JSON with name, domain, social_handles…
+
+Uses create_competitor → saves in DB → returns the saved row.
+
+GET /competitors
+
+Reads from DB → returns list of competitors.
+
+DELETE /competitors/{id}
+
+Looks for competitor in DB
+
+If exists → delete
+
+If not → send 404 error.
+
+## app/api/v1/router.py – main API router
+
+👉 Simple idea:
+This collects all v1 endpoints in one place. Later you’ll add ads, summary, alerts routers here too.
+
+## app/main.py – FastAPI app entry
+👉 Simple idea:
+
+Creates FastAPI app
+
+Makes sure tables exist (dev mode)
+
+Adds CORS so your frontend can call it
+
+Mounts all v1 endpoints under /api/v1
+
+Gives you a test root / endpoint.
+
+## 
