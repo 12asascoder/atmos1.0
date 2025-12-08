@@ -7,6 +7,8 @@ interface ChatInputProps {
   onSend: () => void;
   onResponseReceived: (response: string) => void;
   placeholder?: string;
+  action?: string; // Add action prop for quick actions
+  context?: any; // Add context prop for campaign context
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
@@ -14,7 +16,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onChange, 
   onSend,
   onResponseReceived,
-  placeholder = 'Describe your campaign goals...' 
+  placeholder = 'Describe your campaign goals...',
+  action = 'chat',
+  context = {}
 }) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -46,7 +50,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userMessage
+          message: userMessage,
+          action: action,
+          locale: 'US (en-US), currency $', // You can make this dynamic if needed
+          context: {
+            brand: context.brand || 'unknown',
+            product: context.product || 'unknown',
+            category: context.category || 'unknown',
+            market: context.market || 'unknown',
+            pricing: context.pricing || 'unknown',
+            objective: context.objective || 'unknown',
+            kpi: context.kpi || 'unknown',
+            budget: context.budget || 'unknown',
+            timeline: context.timeline || 'unknown',
+            stage: context.stage || 'unknown',
+            channels: context.channels || 'unknown',
+            competitors: context.competitors || 'unknown',
+            constraints: context.constraints || 'none'
+          }
         })
       });
 

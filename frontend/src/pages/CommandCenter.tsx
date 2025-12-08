@@ -14,6 +14,22 @@ interface Message {
   timestamp: string;
 }
 
+interface CampaignContext {
+  brand: string;
+  product: string;
+  category: string;
+  market: string;
+  pricing: string;
+  objective: string;
+  kpi: string;
+  budget: string;
+  timeline: string;
+  stage: string;
+  channels: string;
+  competitors: string;
+  constraints: string;
+}
+
 const CommandCenter: React.FC = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -25,12 +41,30 @@ const CommandCenter: React.FC = () => {
     }
   ]);
   const [hasStartedChat, setHasStartedChat] = useState(false);
+  const [currentAction, setCurrentAction] = useState('chat');
+  
+  // Campaign context state
+  const [context, setContext] = useState<CampaignContext>({
+    brand: '',
+    product: '',
+    category: '',
+    market: '',
+    pricing: '',
+    objective: '',
+    kpi: '',
+    budget: '',
+    timeline: '',
+    stage: '',
+    channels: '',
+    competitors: '',
+    constraints: 'none'
+  });
 
   const quickActions = [
-    { label: 'Launch campaign for new product', icon: Zap },
-    { label: 'Analyze audience insights', icon: Target },
-    { label: 'Review competitor positioning', icon: Eye },
-    { label: 'Generate creative concepts', icon: Sparkles }
+    { label: 'Launch campaign for new product', icon: Zap, action: 'launch_campaign' },
+    { label: 'Analyze audience insights', icon: Target, action: 'analyze_audience' },
+    { label: 'Review competitor positioning', icon: Eye, action: 'review_competitors' },
+    { label: 'Generate creative concepts', icon: Sparkles, action: 'generate_creatives' }
   ];
 
   const handleSend = () => {
@@ -49,6 +83,7 @@ const CommandCenter: React.FC = () => {
     };
     
     setMessages([...messages, newMessage]);
+    setMessage('');
   };
 
   const handleResponseReceived = (response: string) => {
@@ -60,6 +95,14 @@ const CommandCenter: React.FC = () => {
     };
     
     setMessages(prev => [...prev, botMessage]);
+    
+    // Reset action to 'chat' after response
+    setCurrentAction('chat');
+  };
+
+  const handleQuickAction = (label: string, action: string) => {
+    setMessage(label);
+    setCurrentAction(action);
   };
 
   return (
@@ -96,23 +139,25 @@ const CommandCenter: React.FC = () => {
           <div className={`px-6 py-4 ${colors.neutral.borderLight} border-t ${colors.neutral[50]}/50`}>
             <p className={`text-xs font-medium ${colors.neutral.textLight} mb-3`}>Quick actions:</p>
             <div className="grid grid-cols-4 gap-2">
-              {quickActions.map((action, idx) => (
+              {quickActions.map((item, idx) => (
                 <QuickAction
                   key={idx}
-                  label={action.label}
-                  icon={action.icon}
-                  onClick={() => setMessage(action.label)}
+                  label={item.label}
+                  icon={item.icon}
+                  onClick={() => handleQuickAction(item.label, item.action)}
                 />
               ))}
             </div>
           </div>
 
-          {/* Input - Always visible */}
+          {/* Input - Now with context and action props */}
           <ChatInput
             value={message}
             onChange={setMessage}
             onSend={handleSend}
             onResponseReceived={handleResponseReceived}
+            action={currentAction}
+            context={context}
           />
         </div>
       </div>
