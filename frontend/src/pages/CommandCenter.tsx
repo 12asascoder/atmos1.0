@@ -21,9 +21,10 @@ const CommandCenter: React.FC = () => {
       id: 1,
       type: 'bot',
       content: 'Welcome to the Command Center. I\'m your intelligent advertising assistant. Tell me about your campaign goals, and I\'ll help you create a comprehensive strategy tailored to your needs.',
-      timestamp: '09:24'
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     }
   ]);
+  const [hasStartedChat, setHasStartedChat] = useState(false);
 
   const quickActions = [
     { label: 'Launch campaign for new product', icon: Zap },
@@ -35,6 +36,11 @@ const CommandCenter: React.FC = () => {
   const handleSend = () => {
     if (!message.trim()) return;
     
+    // Set chat as started when first message is sent
+    if (!hasStartedChat) {
+      setHasStartedChat(true);
+    }
+    
     const newMessage: Message = {
       id: messages.length + 1,
       type: 'user',
@@ -43,60 +49,71 @@ const CommandCenter: React.FC = () => {
     };
     
     setMessages([...messages, newMessage]);
-    setMessage('');
+  };
+
+  const handleResponseReceived = (response: string) => {
+    const botMessage: Message = {
+      id: messages.length + 1,
+      type: 'bot',
+      content: response,
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    };
     
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
-        type: 'bot',
-        content: 'I\'m analyzing your request and preparing a customized strategy. This will include target demographics, channel recommendations, and creative direction.',
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      }]);
-    }, 1200);
+    setMessages(prev => [...prev, botMessage]);
   };
 
   return (
     <div className={`min-h-screen ${colors.background.gradient}`}>
       <Navigation />
       
-      <div className="max-w-7xl mx-auto">
+      <div className={`transition-all duration-700 ease-in-out ${
+        hasStartedChat ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-96 opacity-100'
+      }`}>
         <Header />
-        
-        {/* Main Content */}
-        <div className="px-6 py-6">
-          <div className={`${colors.background.card} rounded-2xl ${colors.neutral.border} border shadow-sm overflow-hidden`} 
-               style={{ height: 'calc(100vh - 240px)' }}>
-            <div className="h-full flex flex-col">
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
-                ))}
-              </div>
+      </div>
+      
+      <div className={`transition-all duration-700 ease-in-out ${
+        hasStartedChat 
+          ? 'mx-0 my-0' 
+          : 'max-w-7xl mx-auto px-6 py-6'
+      }`}>
+        <div 
+          className={`${colors.background.card} ${colors.neutral.border} border shadow-sm flex flex-col transition-all duration-700 ease-in-out ${
+            hasStartedChat 
+              ? 'rounded-none h-[calc(100vh-64px)]' 
+              : 'rounded-2xl'
+          }`}
+          style={!hasStartedChat ? { height: 'calc(100vh - 240px)' } : {}}
+        >
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+          </div>
 
-              {/* Quick Actions */}
-              <div className={`px-6 py-4 ${colors.neutral.borderLight} border-t ${colors.neutral[50]}/50`}>
-                <p className={`text-xs font-medium ${colors.neutral.textLight} mb-3`}>Quick actions:</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {quickActions.map((action, idx) => (
-                    <QuickAction
-                      key={idx}
-                      label={action.label}
-                      icon={action.icon}
-                      onClick={() => setMessage(action.label)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Input */}
-              <ChatInput
-                value={message}
-                onChange={setMessage}
-                onSend={handleSend}
-              />
+          {/* Quick Actions */}
+          <div className={`px-6 py-4 ${colors.neutral.borderLight} border-t ${colors.neutral[50]}/50`}>
+            <p className={`text-xs font-medium ${colors.neutral.textLight} mb-3`}>Quick actions:</p>
+            <div className="grid grid-cols-4 gap-2">
+              {quickActions.map((action, idx) => (
+                <QuickAction
+                  key={idx}
+                  label={action.label}
+                  icon={action.icon}
+                  onClick={() => setMessage(action.label)}
+                />
+              ))}
             </div>
           </div>
+
+          {/* Input - Always visible */}
+          <ChatInput
+            value={message}
+            onChange={setMessage}
+            onSend={handleSend}
+            onResponseReceived={handleResponseReceived}
+          />
         </div>
       </div>
     </div>

@@ -1,44 +1,91 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+
+interface Message {
+  id: number;
+  type: 'bot' | 'user';
+  content: string;
+  timestamp: string;
+}
 
 interface MessageBubbleProps {
-  message: {
-    id: number;
-    type: 'bot' | 'user';
-    content: string;
-    timestamp: string;
-  };
+  message: Message;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+  const isBot = message.type === 'bot';
+  
+  const formatContent = (content: string) => {
+    let formatted = content;
+    
+    // Convert headers
+    formatted = formatted.replace(/^### (.+)$/gm, '<h3 class="text-lg font-bold text-slate-900 mt-4 mb-2">$1</h3>');
+    formatted = formatted.replace(/^#### (.+)$/gm, '<h4 class="text-base font-semibold text-slate-800 mt-3 mb-2">$1</h4>');
+    formatted = formatted.replace(/^##### (.+)$/gm, '<h5 class="text-sm font-semibold text-slate-700 mt-2 mb-1">$1</h5>');
+    
+    // Convert bold text
+    formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-slate-900">$1</strong>');
+    
+    // Convert bullet points with proper nesting
+    formatted = formatted.replace(/^\* (.+)$/gm, '<li class="ml-4 mb-1">$1</li>');
+    formatted = formatted.replace(/^\+ (.+)$/gm, '<li class="ml-8 mb-1 list-disc">$1</li>');
+    
+    // Wrap consecutive li elements in ul
+    formatted = formatted.replace(/(<li[^>]*>.*?<\/li>\s*)+/gs, (match) => {
+      return `<ul class="list-disc space-y-1 my-2">${match}</ul>`;
+    });
+    
+    // Convert line breaks to paragraphs
+    const lines = formatted.split('\n');
+    const paragraphs: string[] = [];
+    let currentParagraph = '';
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Check if line is already formatted (contains HTML tags)
+      if (trimmedLine.match(/^<(h[3-5]|ul|li)/)) {
+        if (currentParagraph) {
+          paragraphs.push(`<p class="mb-2 text-slate-700 leading-relaxed">${currentParagraph}</p>`);
+          currentParagraph = '';
+        }
+        paragraphs.push(trimmedLine);
+      } else if (trimmedLine === '') {
+        if (currentParagraph) {
+          paragraphs.push(`<p class="mb-2 text-slate-700 leading-relaxed">${currentParagraph}</p>`);
+          currentParagraph = '';
+        }
+      } else {
+        currentParagraph += (currentParagraph ? ' ' : '') + trimmedLine;
+      }
+    }
+    
+    if (currentParagraph) {
+      paragraphs.push(`<p class="mb-2 text-slate-700 leading-relaxed">${currentParagraph}</p>`);
+    }
+    
+    return paragraphs.join('');
+  };
+
   return (
-    <div className={`flex gap-4 ${message.type === 'user' ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-        message.type === 'bot' 
-          ? 'bg-gradient-to-br from-indigo-500 to-purple-600' 
-          : 'bg-slate-200'
-      }`}>
-        {message.type === 'bot' ? (
-          <Sparkles className="w-4 h-4 text-white" />
-        ) : (
-          <div className="w-5 h-5 rounded-full bg-slate-400" />
-        )}
-      </div>
-      <div className={`flex-1 ${message.type === 'user' ? 'flex justify-end' : ''}`}>
-        <div className={`inline-block max-w-2xl ${
-          message.type === 'bot' 
-            ? 'bg-slate-50 rounded-2xl rounded-tl-sm' 
-            : 'bg-indigo-500 text-white rounded-2xl rounded-tr-sm'
-        } px-5 py-3.5`}>
-          <p className={`text-sm leading-relaxed ${message.type === 'bot' ? 'text-slate-700' : 'text-white'}`}>
-            {message.content}
-          </p>
-          <span className={`text-xs mt-2 block ${
-            message.type === 'bot' ? 'text-slate-400' : 'text-indigo-200'
-          }`}>
-            {message.timestamp}
-          </span>
+    <div className={`flex ${isBot ? 'justify-start' : 'justify-end'}`}>
+      <div className={`max-w-3xl ${isBot ? 'mr-12' : 'ml-12'}`}>
+        <div className={`rounded-2xl px-5 py-4 ${
+          isBot 
+            ? 'bg-slate-50 text-slate-900 border border-slate-200' 
+            : 'bg-indigo-600 text-white'
+        }`}>
+          {isBot ? (
+            <div 
+              className="prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
+            />
+          ) : (
+            <p className="text-sm leading-relaxed">{message.content}</p>
+          )}
         </div>
+        <p className={`text-xs text-slate-500 mt-1.5 ${isBot ? 'text-left' : 'text-right'}`}>
+          {message.timestamp}
+        </p>
       </div>
     </div>
   );
