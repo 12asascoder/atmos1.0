@@ -1,0 +1,11 @@
+
+# env files
+backend/.env
+.env
+*.env
+backend/.env
+
+backend/.env
+.env
+*.env
+.DS_Store
