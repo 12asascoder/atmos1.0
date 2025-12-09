@@ -1,3 +1,20 @@
+-- There are two tables here users and user_profiles
+
+--users table vs user_profiles view:
+-- users (Table) - Complete Data
+
+-- This is the actual database table that stores ALL user information
+-- Contains sensitive data like password_hash
+-- Should only be accessed by your backend/server
+-- Used for authentication and internal operations
+
+-- user_profiles (View) - Safe Public Data
+
+-- This is a virtual view (not a real table) that shows a filtered version of the users table
+-- Excludes sensitive data like password_hash
+-- Safe to expose to frontend or other users
+-- Used when you need to display user information without security risks
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
