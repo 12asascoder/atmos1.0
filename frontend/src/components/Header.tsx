@@ -13,17 +13,6 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
-  const handleGenerateAd = async (prompt: string) => {
-    // Send to your backend
-    const response = await fetch('/api/generate-ad', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
-    });
-    const data = await response.json();
-    console.log('Generated ad:', data);
-  };
-
   return (
     <>
       <div className="max-w-7xl mx-auto px-6 pt-6 pb-4">
@@ -111,7 +100,6 @@ const Header: React.FC<HeaderProps> = ({
       <GenerateAdPopup 
         isOpen={isPopupOpen}
         onClose={() => setIsPopupOpen(false)}
-        onGenerate={handleGenerateAd}
       />
     </>
   );

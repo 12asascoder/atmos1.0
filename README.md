@@ -22,9 +22,11 @@ Components for CommandCenter page
 - Navigation.tsx
 - QuickAction.tsx
 - StatusBadge.tsx
+- GenerateAdPopup.tsx
 
 ### API calls to backend
-- ChatInput.tsx -> http://localhost:5001/genai_call (api_call.py)
+- ChatInput.tsx -> http://localhost:5001/genai_call (/backend/app/api/commandCenter/api_call.py)
+- GenerateAdPopup.tsx -> http://localhost:5002/image_gen (/backend/app/api/commandCenter/generate_ad.py)
 
 
 frontend/
