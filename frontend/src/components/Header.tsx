@@ -37,6 +37,12 @@ const Header: React.FC<HeaderProps> = ({
                 </svg>
                 <span className="text-xs font-semibold">Active</span>
               </div>
+              <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white flex items-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="text-sm">Generate AD</span>
+              </button>
             </div>
           </div>
         </div>
