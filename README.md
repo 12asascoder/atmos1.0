@@ -14,6 +14,19 @@ snitch-marketing-os/
 
 
 ## 🎨 frontend/ – UI for dashboard
+Components for CommandCenter page
+- ChatInput.tsx
+- Header.tsx
+- InsightCard.tsx
+- MessageBubble.tsx
+- Navigation.tsx
+- QuickAction.tsx
+- StatusBadge.tsx
+
+### API calls to backend
+- ChatInput.tsx -> http://localhost:5001/genai_call (api_call.py)
+
+
 frontend/
 ├── public/                  # static assets (logos, icons, fonts)
 ├── src/
