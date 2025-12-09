@@ -17,3 +17,5 @@ backend/ml/**/*.pyc
 
 backend/.env
 
+backend/venv/
+venv/
