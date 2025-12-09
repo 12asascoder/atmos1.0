@@ -242,4 +242,6 @@ Mounts all v1 endpoints under /api/v1
 
 Gives you a test root / endpoint.
 
-## 
+uvicorn app.main:app --reload
+
+python terminal.py
