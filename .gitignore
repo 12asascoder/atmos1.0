@@ -9,3 +9,9 @@ backend/.env
 .env
 *.env
 .DS_Store
+
+# ML local data (videos, outputs etc.)
+backend/ml/data/
+backend/ml/__pycache__/
+backend/ml/**/*.pyc
+
