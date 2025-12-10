@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, JSON, TIMESTAMP, func, BigInteger
+from sqlalchemy import Column, String, JSON, TIMESTAMP, func, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -26,7 +26,5 @@ class Competitor(Base):
         onupdate=func.now(),
     )
 
-    # 👇 IMPORTANT CHANGE: Python attribute is NOT named "metadata" anymore
-    extra_metadata = Column("metadata", JSON, nullable=True)
-    #        ▲              ▲
-    #   Python name   DB column name
+    #IMPORTANT: now matches your DB column "extra_metadata"
+    extra_metadata = Column(JSON, nullable=True)
