@@ -4,14 +4,21 @@ import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
 import SignUpPage from './pages/Signup';
+import MarketingOSLanding from './pages/Home';
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* PUBLIC ROUTES - Redirect to /command-center if already logged in */}
+        {/* LANDING PAGE - Public route */}
         <Route 
           path="/" 
+          element={<MarketingOSLanding />} 
+        />
+
+        {/* PUBLIC ROUTES - Redirect to /command-center if already logged in */}
+        <Route 
+          path="/login" 
           element={
             <PublicRoute>
               <LoginPage />
@@ -74,7 +81,7 @@ function App() {
         />
         */}
 
-        {/* FALLBACK - Redirect unknown routes to login */}
+        {/* FALLBACK - Redirect unknown routes to landing page */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

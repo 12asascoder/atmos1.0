@@ -187,7 +187,7 @@ export function SignupForm({
                   )}
                 </Button>
                 <FieldDescription className="text-center">
-                  Already have an account? <a href="/" className="font-medium hover:underline">Login</a>
+                  Already have an account? <a href="/login" className="font-medium hover:underline">Login</a>
                 </FieldDescription>
               </Field>
             </FieldGroup>
