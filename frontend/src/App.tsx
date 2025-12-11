@@ -5,6 +5,7 @@ import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
 import SignUpPage from './pages/Signup';
 import MarketingOSLanding from './pages/Home';
+import OnboardingPage from './components/OnBoarding';
 
 function App() {
   return (
@@ -35,9 +36,29 @@ function App() {
           } 
         />
 
+        {/* ONBOARDING ROUTE - Protected, shows after signup */}
+        <Route 
+          path="/onboarding" 
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          } 
+        />
+
         {/* PROTECTED ROUTES - Require authentication */}
         <Route 
           path="/command-center" 
+          element={
+            <ProtectedRoute>
+              <CommandCenter />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Alias for command-center */}
+        <Route 
+          path="/dashboard" 
           element={
             <ProtectedRoute>
               <CommandCenter />
