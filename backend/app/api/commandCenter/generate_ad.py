@@ -2,9 +2,8 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+import requests
 import base64
-from google import genai
-from io import BytesIO
 
 load_dotenv()
 
@@ -13,8 +12,9 @@ app = Flask(__name__)
 # Configure CORS properly
 CORS(app)
 
-# Gemini API configuration
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# Qubrid API configuration
+QUBRID_URL = "https://platform.qubrid.com/api/v1/qubridai/image/generation"
+QUBRID_API_KEY = os.environ.get("QUBRID_API_KEY")
 
 @app.route('/image_gen', methods=['POST', 'OPTIONS'])
 def image_gen():
@@ -41,66 +41,75 @@ def image_gen():
             return jsonify(error_response), 400
         
         # Check if API key is configured
-        if not GEMINI_API_KEY:
+        if not QUBRID_API_KEY:
             return jsonify({
                 "error": "API key not configured",
-                "message": "Please set GEMINI_API_KEY in your .env file"
+                "message": "Please set QUBRID_API_KEY in your .env file"
             }), 500
         
-        print(f"Sending request to Gemini API...")
+        # Prepare headers for Qubrid API
+        headers = {
+            "Authorization": f"Bearer {QUBRID_API_KEY}",
+            "Content-Type": "application/json"
+        }
         
-        # Initialize Gemini client with API key
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        # Prepare data for Qubrid API - note: uses positive_prompt, not prompt
+        payload = {
+            "model": "stabilityai/stable-diffusion-3.5-large",
+            "positive_prompt": prompt,
+            "width": 1024,
+            "height": 1024,
+            "steps": 9,
+            "cfg": 0,
+            "seed": 42
+        }
         
-        # Generate image using Gemini
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=[prompt],
-        )
+        print(f"Sending request to Qubrid API...")
+        print(f"Payload: {payload}")
         
-        print(f"Gemini API response received")
+        # Make request to Qubrid API
+        response = requests.post(QUBRID_URL, headers=headers, json=payload, timeout=60)
         
-        # Extract image from response
-        image_found = False
-        for part in response.parts:
-            if part.inline_data is not None:
-                # Convert the image to bytes
-                image = part.as_image()
-                
-                # Save image to BytesIO buffer
-                buffer = BytesIO()
-                image.save(buffer, format='PNG')
-                image_binary = buffer.getvalue()
-                
-                # Convert to base64
-                image_base64 = base64.b64encode(image_binary).decode('utf-8')
-                
-                print(f"Successfully generated image (size: {len(image_binary)} bytes)")
-                print(f"Base64 length: {len(image_base64)} characters")
-                
-                image_found = True
-                
-                # Return the image as base64
-                return jsonify({
-                    "success": True,
-                    "image": image_base64,
-                    "format": "png",
-                    "size": len(image_binary)
-                }), 200
+        print(f"Qubrid API response status: {response.status_code}")
+        print(f"Response content type: {response.headers.get('content-type')}")
         
-        # If no image was found in response
-        if not image_found:
-            # Check if there's text instead
-            text_response = ""
-            for part in response.parts:
-                if part.text is not None:
-                    text_response += part.text
-            
+        # Check if request was successful
+        if response.status_code != 200:
+            print(f"Error response: {response.text}")
             return jsonify({
-                "error": "No image generated",
-                "message": "Gemini did not return an image",
-                "text_response": text_response
-            }), 500
+                "error": "Failed to generate image from Qubrid API",
+                "status_code": response.status_code,
+                "details": response.text
+            }), response.status_code
+        
+        # The response is binary image data (PNG), convert to base64
+        image_binary = response.content
+        image_base64 = base64.b64encode(image_binary).decode('utf-8')
+        
+        print(f"Successfully generated image (size: {len(image_binary)} bytes)")
+        print(f"Base64 length: {len(image_base64)} characters")
+        
+        # Return the image as base64
+        return jsonify({
+            "success": True,
+            "image": image_base64,
+            "format": "png",
+            "size": len(image_binary)
+        }), 200
+        
+    except requests.exceptions.Timeout:
+        print("Error: Request to Qubrid API timed out")
+        return jsonify({
+            "error": "Request timed out",
+            "message": "The image generation took too long. Please try again."
+        }), 504
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error: Request exception - {str(e)}")
+        return jsonify({
+            "error": "Failed to connect to image generation service",
+            "details": str(e)
+        }), 503
         
     except Exception as e:
         print(f"Error in image_gen: {str(e)}")
@@ -115,10 +124,10 @@ def image_gen():
 def health():
     return jsonify({
         "status": "healthy",
-        "gemini_api_configured": bool(GEMINI_API_KEY)
+        "qubrid_api_configured": bool(QUBRID_API_KEY)
     }), 200
 
 if __name__ == '__main__':
     print("Starting Flask server...")
-    print(f"GEMINI_API_KEY configured: {bool(GEMINI_API_KEY)}")
+    print(f"QUBRID_API_KEY configured: {bool(QUBRID_API_KEY)}")
     app.run(debug=True, port=5002)
