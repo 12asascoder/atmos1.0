@@ -14,7 +14,11 @@ snitch-marketing-os/
 
 
 ## 🎨 frontend/ – UI for dashboard
-Components for CommandCenter page
+### Components and Pages for CommandCenter page
+#### Pages
+- CommandCenter.tsx
+
+#### Components
 - ChatInput.tsx
 - Header.tsx
 - InsightCard.tsx
@@ -24,10 +28,23 @@ Components for CommandCenter page
 - StatusBadge.tsx
 - GenerateAdPopup.tsx
 
-### API calls to backend
+### API calls to backend for CommandCenter
 - ChatInput.tsx -> http://localhost:5001/genai_call (/backend/app/api/commandCenter/api_call.py)
 - GenerateAdPopup.tsx -> http://localhost:5002/image_gen (/backend/app/api/commandCenter/generate_ad.py)
 
+### Components and Pages for Login and Signup
+#### Pages
+- Login.tsx
+- Signup.tsx
+
+#### Components
+- Login-form.tsx
+- Signup-form.tsx
+- ProtectedRoute.tsx (in case someone directly types /command-center without logging in it redirects to login page)
+
+### API calls to backend for Authentication
+- Signup-form.tsx -> http://localhost:5003/sign-up(/backend/app/api/Authentication/auth.py)
+- Login-form.tsx -> http://localhost:5003/login(/backend/app/api/Authentication/auth.py)
 
 frontend/
 ├── public/                  # static assets (logos, icons, fonts)
