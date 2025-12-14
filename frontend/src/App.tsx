@@ -6,6 +6,7 @@ import LoginPage from './pages/Login';
 import SignUpPage from './pages/Signup';
 import Home from './pages/Home';
 import OnboardingPage from './components/OnBoarding';
+import AutoCreate from './pages/AutoCreate';
 
 function App() {
   return (
@@ -62,6 +63,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CommandCenter />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/auto-create" 
+          element={
+            <ProtectedRoute>
+              <AutoCreate />
             </ProtectedRoute>
           } 
         />
