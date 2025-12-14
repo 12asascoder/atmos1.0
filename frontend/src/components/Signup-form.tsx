@@ -67,7 +67,7 @@ export function SignupForm({
         localStorage.setItem("user", JSON.stringify(data.user))
         
         // Redirect to dashboard or home page
-        navigate("/")
+        navigate("/onboarding")
       } else {
         setError(data.error || "Signup failed. Please try again.")
       }

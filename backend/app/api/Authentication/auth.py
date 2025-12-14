@@ -36,7 +36,7 @@ def signup():
         name = data.get("name")
         email = data.get("email")
         password = data.get("password")
-        confirm_password = data.get("confirmPassword")  # Changed from "confirm-password"
+        confirm_password = data.get("confirmPassword")
 
         # Validate all fields are present
         if not name or not email or not password or not confirm_password:
@@ -74,19 +74,19 @@ def signup():
             return jsonify({
                 'success': False,
                 'error': 'Email already exists'
-            }), 409  # 409 Conflict status code
+            }), 409
         
         # Hash the password
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
         
-        # Insert new user into database
-        # Note: Column name is password_hash not password
+        # Insert new user into database with onboarding_completed flag
         response = (
             supabase.table("users")
             .insert({
                 "name": name,
                 "email": email,
-                "password_hash": hashed_password  # Changed from "password" to "password_hash"
+                "password_hash": hashed_password,
+                "onboarding_completed": False
             })
             .execute()
         )
@@ -94,10 +94,10 @@ def signup():
         if response.data:
             user_data = response.data[0]
 
-            # Create JWT token with user_id (not id)
+            # Create JWT token
             token = jwt.encode(
                 {
-                    'user_id': user_data['user_id'],  # Changed from 'id' to 'user_id'
+                    'user_id': user_data['user_id'],
                     'email': user_data['email'],
                     'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
                 },
@@ -110,9 +110,10 @@ def signup():
                 'message': "Account Created Successfully",
                 'token': token,
                 'user': {
-                    'user_id': user_data['user_id'],  # Changed from 'id'
+                    'user_id': user_data['user_id'],
                     'name': user_data['name'],
-                    'email': user_data['email']
+                    'email': user_data['email'],
+                    'onboarding_completed': False
                 }
             }), 201
         else:
@@ -131,9 +132,97 @@ def signup():
         }), 400
         
     except Exception as e:
-        print(f"Error in signup: {str(e)}")  # Log for debugging
+        print(f"Error in signup: {str(e)}")
         import traceback
-        traceback.print_exc()  # Print full traceback for debugging
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'An internal server error occurred'
+        }), 500
+
+
+@app.route('/complete-onboarding', methods=['POST'])
+def complete_onboarding():
+    try:
+        # Get token from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({
+                'success': False,
+                'error': 'No authorization token provided'
+            }), 401
+        
+        token = auth_header.split(' ')[1]
+        
+        # Verify token
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            user_id = payload['user_id']
+        except jwt.ExpiredSignatureError:
+            return jsonify({
+                'success': False,
+                'error': 'Token has expired'
+            }), 401
+        except jwt.InvalidTokenError:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid token'
+            }), 401
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': "No data provided"
+            }), 400
+        
+        business_type = data.get("businessType")
+        industry = data.get("industry")
+        goals = data.get("goals")
+        
+        # Validate required fields
+        if not business_type or not industry or not goals:
+            return jsonify({
+                'success': False,
+                'error': 'All onboarding questions must be answered'
+            }), 400
+        
+        # Update user with onboarding data
+        response = (
+            supabase.table("users")
+            .update({
+                "business_type": business_type,
+                "industry": industry,
+                "goals": goals,
+                "onboarding_completed": True
+            })
+            .eq("user_id", user_id)
+            .execute()
+        )
+        
+        if response.data:
+            user_data = response.data[0]
+            return jsonify({
+                'success': True,
+                'message': "Onboarding completed successfully",
+                'user': {
+                    'user_id': user_data['user_id'],
+                    'name': user_data['name'],
+                    'email': user_data['email'],
+                    'business_type': user_data.get('business_type'),
+                    'industry': user_data.get('industry'),
+                    'goals': user_data.get('goals'),
+                    'onboarding_completed': True
+                }
+            }), 200
+        else:
+            raise Exception("Failed to update user")
+            
+    except Exception as e:
+        print(f"Error in complete_onboarding: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': 'An internal server error occurred'
@@ -216,7 +305,8 @@ def login():
             'user': {
                 'user_id': user_data['user_id'],
                 'name': user_data['name'],
-                'email': user_data['email']
+                'email': user_data['email'],
+                'onboarding_completed': user_data.get('onboarding_completed', False)
             }
         }), 200
 
