@@ -248,7 +248,7 @@ const OnboardingPage = () => {
         {/* Skip Button */}
         <div className="text-center mt-6">
           <button 
-            onClick={() => window.location.href = '/command-center'}
+            onClick={() => window.location.href = '/'}
             className="text-slate-700 hover:text-cyan-600 transition-colors text-sm font-bold underline underline-offset-4 hover:underline-offset-2 tracking-tight"
           >
             Skip for now

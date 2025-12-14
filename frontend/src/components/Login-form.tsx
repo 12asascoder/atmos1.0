@@ -63,7 +63,7 @@ export function LoginForm({
         localStorage.setItem("user", JSON.stringify(data.user))
         
         // Redirect to dashboard or home page
-        navigate("/command-center")
+        navigate("/")
       } else {
         setError(data.error || "Login failed. Please try again.")
       }

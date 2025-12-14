@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, TrendingUp, Target, Eye, Zap } from 'lucide-react';
 import {
   Navbar,
   NavBody,
@@ -31,9 +30,10 @@ const Navigation: React.FC = () => {
         if (userStr) {
           try {
             const user = JSON.parse(userStr);
-            setUserName(user.name);
+            setUserName(user.name || user.username || 'User');
           } catch (error) {
             console.error('Error parsing user data:', error);
+            setUserName('User');
           }
         }
       } else {
@@ -45,21 +45,31 @@ const Navigation: React.FC = () => {
     // Check on mount
     checkAuthStatus();
 
-    // Optional: Listen for storage changes (if user logs in/out in another tab)
+    // Listen for storage changes (if user logs in/out in another tab)
     window.addEventListener('storage', checkAuthStatus);
+    
+    // Listen for custom login event
+    const handleLoginEvent = () => checkAuthStatus();
+    window.addEventListener('userLoggedIn', handleLoginEvent);
     
     return () => {
       window.removeEventListener('storage', checkAuthStatus);
+      window.removeEventListener('userLoggedIn', handleLoginEvent);
     };
   }, []);
 
   const navItems = [
+    { name: 'Home', link: '/home' },
     { name: 'Command Center', link: '/command-center' },
     { name: 'Performance', link: '/performance' },
     { name: 'Audience Intel', link: '/audience' },
-    { name: 'Market View', link: '/market' },
-    { name: 'Quick Launch', link: '/quick-launch' }
+    { name: 'Market View', link: '/market' }
   ];
+
+  const handleNavClick = (link: string) => {
+    navigate(link);
+    setIsMobileMenuOpen(false);
+  };
 
   const handleLogout = () => {
     // Clear localStorage
@@ -71,7 +81,7 @@ const Navigation: React.FC = () => {
     setUserName(null);
     setIsMobileMenuOpen(false);
     
-    // Redirect to login
+    // Redirect to home
     navigate('/');
   };
 
@@ -80,14 +90,17 @@ const Navigation: React.FC = () => {
       {/* Desktop Navigation */}
       <NavBody>
         <NavbarLogo />
-        <NavItems items={navItems} />
+        <NavItems 
+          items={navItems} 
+          onItemClick={(link) => navigate(link)}
+        />
         <div className="flex items-center gap-4">
           {isLoggedIn ? (
             <>
-              {/* Show user name if available */}
+              {/* Show user name */}
               {userName && (
-                <span className="text-sm text-neutral-600 dark:text-neutral-300 hidden md:block">
-                  {userName}
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden md:block font-mulish">
+                  Welcome, {userName}
                 </span>
               )}
               <NavbarButton variant="secondary" onClick={handleLogout}>
@@ -96,10 +109,16 @@ const Navigation: React.FC = () => {
             </>
           ) : (
             <>
-              <NavbarButton variant="secondary" onClick={() => navigate('/')}>
+              <NavbarButton 
+                variant="secondary"
+                onClick={() => navigate('/login')}
+              >
                 Sign In
               </NavbarButton>
-              <NavbarButton variant="gradient" onClick={() => navigate('/sign-up')}>
+              <NavbarButton 
+                variant="gradient"
+                onClick={() => navigate('/sign-up')}
+              >
                 Get Started
               </NavbarButton>
             </>
@@ -122,14 +141,13 @@ const Navigation: React.FC = () => {
           onClose={() => setIsMobileMenuOpen(false)}
         >
           {navItems.map((item, idx) => (
-            <a
+            <button
               key={`mobile-link-${idx}`}
-              href={item.link}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="relative text-neutral-600 dark:text-neutral-300 hover:text-cyan-600 transition-colors"
+              onClick={() => handleNavClick(item.link)}
+              className="relative text-neutral-600 dark:text-neutral-300 hover:text-cyan-600 transition-colors text-left w-full"
             >
               <span className="block font-medium">{item.name}</span>
-            </a>
+            </button>
           ))}
           
           {/* Mobile Auth Buttons */}
@@ -138,8 +156,8 @@ const Navigation: React.FC = () => {
               <>
                 {/* Show user name on mobile */}
                 {userName && (
-                  <div className="text-sm text-neutral-600 dark:text-neutral-300 px-2 py-1 text-center">
-                    Logged in as <span className="font-medium">{userName}</span>
+                  <div className="text-sm text-neutral-600 dark:text-neutral-300 px-2 py-2 text-center bg-slate-50 rounded-lg font-mulish">
+                    Logged in as <span className="font-semibold text-cyan-600">{userName}</span>
                   </div>
                 )}
                 <NavbarButton
@@ -153,20 +171,14 @@ const Navigation: React.FC = () => {
             ) : (
               <>
                 <NavbarButton
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    navigate('/');
-                  }}
+                  onClick={() => handleNavClick('/login')}
                   variant="secondary"
                   className="w-full"
                 >
                   Sign In
                 </NavbarButton>
                 <NavbarButton
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    navigate('/sign-up');
-                  }}
+                  onClick={() => handleNavClick('/sign-up')}
                   variant="gradient"
                   className="w-full"
                 >
