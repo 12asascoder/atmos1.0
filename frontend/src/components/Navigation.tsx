@@ -63,7 +63,7 @@ const Navigation: React.FC = () => {
     { name: 'Command Center', link: '/command-center' },
     { name: 'Performance', link: '/performance' },
     { name: 'Audience Intel', link: '/audience' },
-    { name: 'Market View', link: '/market' }
+    { name: 'Auto Create', link: '/auto-create' }
   ];
 
   const handleNavClick = (link: string) => {
