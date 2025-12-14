@@ -4,8 +4,9 @@ import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
 import SignUpPage from './pages/Signup';
-import MarketingOSLanding from './pages/Home';
+import Home from './pages/Home';
 import OnboardingPage from './components/OnBoarding';
+import AutoCreate from './pages/AutoCreate';
 
 function App() {
   return (
@@ -14,7 +15,7 @@ function App() {
         {/* LANDING PAGE - Public route */}
         <Route 
           path="/" 
-          element={<MarketingOSLanding />} 
+          element={<Home />} 
         />
 
         {/* PUBLIC ROUTES - Redirect to /command-center if already logged in */}
@@ -62,6 +63,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CommandCenter />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/auto-create" 
+          element={
+            <ProtectedRoute>
+              <AutoCreate />
             </ProtectedRoute>
           } 
         />
