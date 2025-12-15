@@ -6,13 +6,24 @@ from supabase import create_client, Client
 import jwt
 
 load_dotenv()
+
+# Try to find .env file in parent directories
+from pathlib import Path
+env_path = Path(__file__).resolve().parent.parent.parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"Loaded .env from: {env_path}")
+else:
+    print(f"No .env found at: {env_path}")
+
 app = Flask(__name__)
 
 CORS(app)
 
 url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-SECRET_KEY = os.environ.get("SECRET_KEY")  # Remove type hint
+# Use SERVICE_ROLE_KEY to bypass RLS for custom auth
+key: str =  os.environ.get("SUPABASE_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # Debug: Check SECRET_KEY
 if SECRET_KEY:
@@ -21,6 +32,10 @@ if SECRET_KEY:
     SECRET_KEY = str(SECRET_KEY).strip()
 else:
     print("WARNING: SECRET_KEY not found in environment variables!")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Script location: {Path(__file__).resolve()}")
+    print("\nPlease add SECRET_KEY to your .env file or set it as environment variable")
+    print("The SECRET_KEY should match the one used in your auth.py file")
     raise ValueError("SECRET_KEY must be set in environment variables")
 
 supabase: Client = create_client(url, key)
@@ -93,25 +108,52 @@ def campaign_goal():
         if goal not in valid_goals:
             return jsonify({'error': f'Invalid goal. Must be one of: {", ".join(valid_goals)}'}), 400
         
-        # Insert goal into auto_create table
-        response = (
+        # Check if user already has a draft campaign
+        existing_campaign = (
             supabase.table("auto_create")
-            .insert({
-                "user_id": user_id,  # Use the decoded UUID from token
-                "campaign_goal": goal,
-                "campaign_status": "draft",
-                "budget_amount": 0.00,  # Numeric value
-                "campaign_duration": 1  # Integer value
-            })
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("campaign_status", "draft")
             .execute()
         )
         
-        return jsonify({
-            'success': True,
-            'message': 'Goal saved successfully',
-            'data': response.data[0],
-            'campaign_id': response.data[0]['id']
-        }), 201
+        if existing_campaign.data:
+            # Update existing draft campaign
+            campaign_id = existing_campaign.data[0]['id']
+            response = (
+                supabase.table("auto_create")
+                .update({"campaign_goal": goal})
+                .eq("id", campaign_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': 'Goal updated successfully',
+                'data': response.data[0],
+                'campaign_id': response.data[0]['id']
+            }), 200
+        else:
+            # Insert new campaign goal
+            response = (
+                supabase.table("auto_create")
+                .insert({
+                    "user_id": user_id,  # Use the decoded UUID from token
+                    "campaign_goal": goal,
+                    "campaign_status": "draft",
+                    "budget_amount": 0.00,  # Numeric value
+                    "campaign_duration": 1  # Integer value
+                })
+                .execute()
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': 'Goal saved successfully',
+                'data': response.data[0],
+                'campaign_id': response.data[0]['id']
+            }), 201
         
     except Exception as e:
         print(f"Error saving goal: {str(e)}")
