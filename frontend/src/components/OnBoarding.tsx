@@ -122,7 +122,7 @@ const OnboardingPage = () => {
         localStorage.setItem('user', JSON.stringify(data.user));
         
         setTimeout(() => {
-          window.location.href = '/command-center';
+          window.location.href = '/';
         }, 1000);
       } else {
         setError(data.error || 'Failed to complete onboarding');
