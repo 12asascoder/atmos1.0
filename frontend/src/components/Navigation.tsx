@@ -90,10 +90,12 @@ const Navigation: React.FC = () => {
       {/* Desktop Navigation */}
       <NavBody>
         <NavbarLogo />
-        <NavItems 
-          items={navItems} 
-          onItemClick={(link) => navigate(link)}
-        />
+        {isLoggedIn && (
+          <NavItems 
+            items={navItems} 
+            onItemClick={(link) => navigate(link)}
+          />
+        )}
         <div className="flex items-center gap-4">
           {isLoggedIn ? (
             <>

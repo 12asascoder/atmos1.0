@@ -1,13 +1,30 @@
-import React from 'react';
-import { Target, Lightbulb, Rocket, RefreshCw, Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { Target, Lightbulb, Rocket, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 
-interface CampaignGoalStepProps {
-  selectedGoal: string | null;
-  setSelectedGoal: (goal: string) => void;
-}
+const CampaignGoalStep = ({ selectedGoal, setSelectedGoal }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [campaignId, setCampaignId] = useState(null);
 
-const CampaignGoalStep: React.FC<CampaignGoalStepProps> = ({ selectedGoal, setSelectedGoal }) => {
+  // Get token from localStorage
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    
+    console.log('Retrieved token from localStorage:', token ? 'Token found' : 'No token');
+    console.log('Token type:', typeof token);
+    
+    if (!token) {
+      setError('Not authenticated. Please login first.');
+    } else {
+      // Ensure it's a string and trim any whitespace
+      const cleanToken = String(token).trim();
+      setUserId(cleanToken);
+      console.log('Clean token set as userId');
+    }
+  }, []);
+
   const goals = [
     {
       id: 'awareness',
@@ -47,17 +64,80 @@ const CampaignGoalStep: React.FC<CampaignGoalStepProps> = ({ selectedGoal, setSe
     }
   ];
 
-  const getRecommendation = () => {
-    if (selectedGoal === 'conversions') {
-      return 'Based on competitor analysis, "Conversions" goal with retargeting strategy shows 34% better ROAS. Recommended daily budget: $450-$680 with gradual scaling.';
+  const sendGoalToBackend = async (goalId) => {
+    if (!userId) {
+      setError('User ID not found. Please login again.');
+      return;
     }
-    return null;
+
+    setIsSubmitting(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      console.log('Sending request with:', { goal: goalId, user_id_type: typeof userId });
+      
+      const response = await fetch('http://localhost:5005/api/campaign-goal', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          goal: goalId,
+          user_id: userId  // Pass the token as user_id (it's already a string)
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save goal');
+      }
+
+      console.log('Goal saved successfully:', result);
+      setSuccess(true);
+      setCampaignId(result.campaign_id);
+      
+      // Update parent component's selectedGoal state to enable Next button
+      setSelectedGoal(goalId);
+
+      setTimeout(() => setSuccess(false), 3000);
+
+    } catch (error) {
+      console.error("Failed to send goal:", error);
+      setError(error instanceof Error ? error.message : 'Failed to save goal');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoalSelect = (goalId) => {
+    sendGoalToBackend(goalId);
   };
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto p-8">
       <h2 className="text-3xl font-bold text-slate-800 mb-2">Select Campaign Goal</h2>
       <p className="text-slate-600 mb-8">Choose the primary objective for your advertising campaign</p>
+
+      {/* Success Message */}
+      {success && (
+        <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          <p className="text-emerald-800 font-medium">Goal saved successfully!</p>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-red-800 font-medium">Failed to save goal</p>
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {goals.map((goal) => {
@@ -65,16 +145,15 @@ const CampaignGoalStep: React.FC<CampaignGoalStepProps> = ({ selectedGoal, setSe
           const isSelected = selectedGoal === goal.id;
 
           return (
-            <motion.button
+            <button
               key={goal.id}
-              onClick={() => setSelectedGoal(goal.id)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              onClick={() => handleGoalSelect(goal.id)}
+              disabled={isSubmitting || !userId}
               className={`relative p-8 rounded-2xl text-left transition-all border-2 ${
                 isSelected
                   ? `${goal.borderColor} bg-gradient-to-br ${goal.bgColor}`
                   : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
+              } ${isSubmitting || !userId ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 cursor-pointer'}`}
             >
               <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${goal.color} flex items-center justify-center mb-4`}>
                 <Icon className="w-8 h-8 text-white" />
@@ -83,7 +162,13 @@ const CampaignGoalStep: React.FC<CampaignGoalStepProps> = ({ selectedGoal, setSe
               <h3 className="text-2xl font-bold text-slate-800 mb-2">{goal.title}</h3>
               <p className="text-slate-600">{goal.description}</p>
 
-              {isSelected && (
+              {isSubmitting && isSelected && (
+                <div className="absolute top-4 right-4">
+                  <div className="w-6 h-6 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {isSelected && !isSubmitting && (
                 <div className="absolute top-4 right-4">
                   <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${goal.color} flex items-center justify-center`}>
                     <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -92,29 +177,10 @@ const CampaignGoalStep: React.FC<CampaignGoalStepProps> = ({ selectedGoal, setSe
                   </div>
                 </div>
               )}
-            </motion.button>
+            </button>
           );
         })}
       </div>
-
-      {/* AI Recommendation */}
-      {getRecommendation() && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 rounded-2xl p-6"
-        >
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h4 className="text-lg font-semibold text-slate-800 mb-2">AI Recommendation</h4>
-              <p className="text-slate-700">{getRecommendation()}</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 };
