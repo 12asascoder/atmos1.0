@@ -1,6 +1,9 @@
-import React, { useState, useRef } from 'react';
-import { Sparkles, Download, Heart, Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, Download, Heart, Upload, X, Camera, Image as ImageIcon, Loader } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { imageGenerationAPI, type GeneratedImage } from '../../services/imageGeneration';
+
+
 
 interface CreativeAssetsStepProps {
   selectedGoal: string | null;
@@ -12,34 +15,23 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [generatedAssets, setGeneratedAssets] = useState<GeneratedImage[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [currentPrompt, setCurrentPrompt] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const creativeAssets = [
-    {
-      id: 1,
-      title: 'Run Like Never Before',
-      type: 'Image',
-      score: 94,
-      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&h=600&fit=crop',
-      gradient: 'from-red-500 to-pink-600'
-    },
-    {
-      id: 2,
-      title: 'Unleash Your Speed',
-      type: 'Image',
-      score: 91,
-      image: 'https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=500&h=600&fit=crop',
-      gradient: 'from-slate-400 to-slate-600'
-    },
-    {
-      id: 3,
-      title: 'Performance Redefined',
-      type: 'Image',
-      score: 88,
-      image: 'https://images.unsplash.com/photo-1491553895911-0055eca6402d?w=500&h=600&fit=crop',
-      gradient: 'from-orange-500 to-red-600'
-    }
-  ];
+  // Predefined prompts based on campaign goal
+  const getPromptForGoal = (goal: string | null): string => {
+    const prompts: Record<string, string> = {
+      'awareness': 'Professional product advertisement, brand awareness, eye-catching, high quality, commercial photography, studio lighting',
+      'engagement': 'Engaging product showcase, interactive concept, lifestyle setting, natural environment, social media optimized',
+      'conversion': 'Product in use, compelling call-to-action, clear value proposition, commercial advertisement, conversion-focused',
+      'retention': 'Loyalty building, customer success story, product benefits showcase, long-term value, retention-focused',
+      'lead': 'Lead generation focused, information gathering, valuable offer presentation, B2B oriented, professional',
+    };
+    return prompts[goal || 'awareness'] || 'Professional product advertisement, high quality, commercial photography';
+  };
 
   const recommendations = [
     { label: 'Optimal Format', value: '9:16 Video', stat: '+42% engagement', color: 'from-purple-500 to-indigo-600' },
@@ -47,9 +39,12 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
     { label: 'Color Scheme', value: 'High Contrast', stat: '+28% CTR', color: 'from-emerald-500 to-teal-600' }
   ];
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setUploadedFile(file);
+      
+      // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
@@ -59,25 +54,45 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
     }
   };
 
-  const handleGenerateAssets = () => {
-    if (!uploadedImage) return;
+  const handleGenerateAssets = async () => {
+    if (!uploadedImage || !uploadedFile) return;
     
     setIsGenerating(true);
+    setGenerationProgress(0);
     
-    // Simulate API call to backend
-    setTimeout(() => {
-      setIsGenerating(false);
+    try {
+      // Upload image to backend
+      const base64Image = await imageGenerationAPI.uploadImage(uploadedFile);
+      
+      // Get prompt based on selected goal
+      const prompt = getPromptForGoal(selectedGoal);
+      setCurrentPrompt(prompt);
+      
+      // Generate batch of images
+      const variations = await imageGenerationAPI.generateBatch({
+        image: base64Image,
+        prompt: prompt,
+        num_variations: 3,
+        strength: 0.7,
+      });
+      
+      setGeneratedAssets(variations);
       setHasGenerated(true);
-      // In real implementation, you would:
-      // 1. Send the uploaded image to your backend
-      // 2. Backend processes it with AI
-      // 3. Receive and display generated assets
-    }, 2000);
+      
+    } catch (error) {
+      console.error('Error generating assets:', error);
+      alert('Failed to generate assets. Please try again.');
+    } finally {
+      setIsGenerating(false);
+      setGenerationProgress(100);
+    }
   };
 
   const handleRemoveImage = () => {
     setUploadedImage(null);
+    setUploadedFile(null);
     setHasGenerated(false);
+    setGeneratedAssets([]);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -91,6 +106,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
     
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
+      setUploadedFile(file);
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
@@ -105,6 +121,25 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
       prev.includes(id) ? prev.filter(assetId => assetId !== id) : [...prev, id]
     );
   };
+
+  const downloadAsset = (imageBase64: string, title: string) => {
+    const link = document.createElement('a');
+    link.href = imageBase64;
+    link.download = `${title.replace(/\s+/g, '-').toLowerCase()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Initialize WebSocket connection for progress updates
+  useEffect(() => {
+    // You can implement WebSocket connection here for real-time progress
+    // const socket = new WebSocket('ws://localhost:5000');
+    
+    return () => {
+      // Cleanup WebSocket connection
+    };
+  }, []);
 
   return (
     <div>
@@ -186,6 +221,17 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
                     Product Image Uploaded Successfully!
                   </h3>
                   
+                  {selectedGoal && (
+                    <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                      <p className="text-blue-800 font-medium">
+                        Campaign Goal: <span className="font-bold">{selectedGoal}</span>
+                      </p>
+                      <p className="text-blue-600 text-sm mt-1">
+                        AI will generate assets optimized for {selectedGoal} campaigns
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="space-y-4 mb-6">
                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                       <span className="text-slate-600">Image Status</span>
@@ -196,12 +242,12 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-slate-50 rounded-xl">
-                        <p className="text-slate-600 text-sm mb-1">Processing Type</p>
-                        <p className="font-semibold text-slate-800">AI Creative Generation</p>
+                        <p className="text-slate-600 text-sm mb-1">AI Model</p>
+                        <p className="font-semibold text-slate-800">Kandinsky 2.2</p>
                       </div>
                       <div className="p-4 bg-slate-50 rounded-xl">
                         <p className="text-slate-600 text-sm mb-1">Estimated Time</p>
-                        <p className="font-semibold text-slate-800">1-2 minutes</p>
+                        <p className="font-semibold text-slate-800">30-60 seconds</p>
                       </div>
                     </div>
                   </div>
@@ -214,8 +260,8 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
                     >
                       {isGenerating ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Generating...
+                          <Loader className="w-5 h-5 animate-spin" />
+                          Generating... {generationProgress}%
                         </>
                       ) : (
                         <>
@@ -240,18 +286,27 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
       </div>
 
       {/* AI-Generated Creative Assets (Only show after generation) */}
-      {hasGenerated && (
+      {hasGenerated && generatedAssets.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-slate-800">AI-Generated Creative Assets</h2>
-            <button className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold hover:from-cyan-600 hover:to-teal-700 transition-all shadow-md">
+            <div>
+              <h2 className="text-3xl font-bold text-slate-800">AI-Generated Creative Assets</h2>
+              <p className="text-slate-600 mt-2">
+                Generated with prompt: <span className="font-medium text-cyan-600">{currentPrompt}</span>
+              </p>
+            </div>
+            <button 
+              onClick={handleGenerateAssets}
+              disabled={isGenerating}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold hover:from-cyan-600 hover:to-teal-700 transition-all shadow-md disabled:opacity-50"
+            >
               <Sparkles className="w-5 h-5" />
               Generate More
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            {creativeAssets.map((asset) => (
+            {generatedAssets.map((asset) => (
               <motion.div
                 key={asset.id}
                 whileHover={{ y: -4 }}
@@ -260,29 +315,32 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
                 <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
                   <img
                     src={asset.image}
-                    alt={asset.title}
+                    alt={asset.prompt || 'Generated asset'}
                     className="w-full h-full object-cover"
                   />
                   
                   {/* Score Badge */}
                   <div className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-emerald-500 text-white text-sm font-bold">
-                    Score: {asset.score}
+                    Score: {asset.score || 85}
                   </div>
 
                   {/* Overlay Actions */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="absolute bottom-4 left-4 right-4 flex gap-2">
                       <button
-                        onClick={() => toggleAsset(asset.id)}
+                        onClick={() => toggleAsset(asset.id || 0)}
                         className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
-                          selectedAssets.includes(asset.id)
+                          selectedAssets.includes(asset.id || 0)
                             ? 'bg-cyan-600 text-white'
                             : 'bg-white/90 text-slate-900 hover:bg-white'
                         }`}
                       >
-                        {selectedAssets.includes(asset.id) ? 'Selected' : 'Select'}
+                        {selectedAssets.includes(asset.id || 0) ? 'Selected' : 'Select'}
                       </button>
-                      <button className="w-10 h-10 rounded-lg bg-white/90 hover:bg-white flex items-center justify-center transition-colors">
+                      <button 
+                        onClick={() => downloadAsset(asset.image, asset.prompt || 'generated-asset')}
+                        className="w-10 h-10 rounded-lg bg-white/90 hover:bg-white flex items-center justify-center transition-colors"
+                      >
                         <Download className="w-5 h-5 text-slate-900" />
                       </button>
                       <button className="w-10 h-10 rounded-lg bg-white/90 hover:bg-white flex items-center justify-center transition-colors">
@@ -293,8 +351,15 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = () => {
                 </div>
 
                 <div className="mt-4">
-                  <h3 className="text-xl font-bold text-slate-800 mb-1">{asset.title}</h3>
-                  <p className="text-cyan-600 text-sm">{asset.type}</p>
+                  <h3 className="text-xl font-bold text-slate-800 mb-1 line-clamp-2">
+                    {asset.prompt?.split(',')[0] || 'Generated Asset'}
+                  </h3>
+                  <p className="text-cyan-600 text-sm">{asset.type || 'AI Generated'}</p>
+                  {asset.prompt && (
+                    <p className="text-slate-500 text-xs mt-2 line-clamp-2">
+                      {asset.prompt}
+                    </p>
+                  )}
                 </div>
               </motion.div>
             ))}
