@@ -1,0 +1,97 @@
+{
+  "summary": {
+    "total_ads_scraped": 3,
+    "meta_ads_count": 3,
+    "google_ads_count": 0,
+    "scraped_at": "2025-12-16T13:41:40.526112",
+    "note": "Data extracted via web scraping - limitations apply"
+  },
+  "meta_ads": [
+    {
+      "unique_ad_identifier": "ad_scraped_dc1fb7c0c0",
+      "advertiser_info": {
+        "page_name": "Unknown Advertiser",
+        "advertiser_domain": "nike.com"
+      },
+      "creative_content": {
+        "ad_creative_body": "Ad LibraryAd Library reportAd Library APIBranded contentSystem statusSubscribe to email updatesFAQAbout ads and data usePrivacyTermsCookies",
+        "full_text_preview": "Ad LibraryAd Library reportAd Library APIBranded contentSystem statusSubscribe to email updatesFAQAbout ads and data usePrivacyTermsCookies"
+      },
+      "extracted_data": {
+        "text_line_count": 1,
+        "total_characters": 139,
+        "has_spend_info": false
+      },
+      "scraping_info": {
+        "scraped_at": "2025-12-16T13:39:48.223074",
+        "search_term": "Nike",
+        "element_index": 2
+      }
+    },
+    {
+      "unique_ad_identifier": "ad_scraped_dc1fb7c0c0",
+      "advertiser_info": {
+        "page_name": "Unknown Advertiser",
+        "advertiser_domain": "adidas.com"
+      },
+      "creative_content": {
+        "ad_creative_body": "Ad LibraryAd Library reportAd Library APIBranded contentSystem statusSubscribe to email updatesFAQAbout ads and data usePrivacyTermsCookies",
+        "full_text_preview": "Ad LibraryAd Library reportAd Library APIBranded contentSystem statusSubscribe to email updatesFAQAbout ads and data usePrivacyTermsCookies"
+      },
+      "extracted_data": {
+        "text_line_count": 1,
+        "total_characters": 139,
+        "has_spend_info": false
+      },
+      "scraping_info": {
+        "scraped_at": "2025-12-16T13:40:29.316281",
+        "search_term": "Adidas",
+        "element_index": 2
+      }
+    },
+    {
+      "unique_ad_identifier": "ad_scraped_dc1fb7c0c0",
+      "advertiser_info": {
+        "page_name": "Unknown Advertiser",
+        "advertiser_domain": "apple.com"
+      },
+      "creative_content": {
+        "ad_creative_body": "Ad LibraryAd Library reportAd Library APIBranded contentSystem statusSubscribe to email updatesFAQAbout ads and data usePrivacyTermsCookies",
+        "full_text_preview": "Ad LibraryAd Library reportAd Library APIBranded contentSystem statusSubscribe to email updatesFAQAbout ads and data usePrivacyTermsCookies"
+      },
+      "extracted_data": {
+        "text_line_count": 1,
+        "total_characters": 139,
+        "has_spend_info": false
+      },
+      "scraping_info": {
+        "scraped_at": "2025-12-16T13:41:06.734024",
+        "search_term": "Apple",
+        "element_index": 2
+      }
+    }
+  ],
+  "google_ads": [],
+  "data_source_notes": {
+    "actually_extractable": [
+      "Ad creative text (partial)",
+      "Advertiser name (sometimes)",
+      "Basic ad structure"
+    ],
+    "not_extractable_via_scraping": [
+      "Spend amounts (hidden behind JavaScript)",
+      "Impressions data (API only)",
+      "Demographic distribution (interactive charts)",
+      "Targeting criteria (click-to-expand modals)",
+      "Click data (never displayed)",
+      "CTR (requires click data)"
+    ],
+    "scraping_limitations": [
+      "Facebook frequently changes HTML structure",
+      "Some data requires user interaction",
+      "Rate limiting and blocking risks",
+      "Inconsistent data formatting"
+    ],
+    "recommendation": "For complete data, use Meta Ad Library API with ads_read permission"
+  }
+}

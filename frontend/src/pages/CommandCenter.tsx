@@ -44,15 +44,18 @@ const CommandCenter: React.FC = () => {
     
     setMessages([...messages, newMessage]);
     setMessage('');
+  };
+
+  // This function receives the AI response from ChatInput
+  const handleResponseReceived = (response: string) => {
+    const botMessage: Message = {
+      id: messages.length + 1,
+      type: 'bot',
+      content: response,
+      timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    };
     
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
-        type: 'bot',
-        content: 'I\'m analyzing your request and preparing a customized strategy. This will include target demographics, channel recommendations, and creative direction.',
-        timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      }]);
-    }, 1200);
+    setMessages(prev => [...prev, botMessage]);
   };
 
   return (
@@ -94,6 +97,7 @@ const CommandCenter: React.FC = () => {
                 value={message}
                 onChange={setMessage}
                 onSend={handleSend}
+                onResponseReceived={handleResponseReceived}  // Add this prop
               />
             </div>
           </div>

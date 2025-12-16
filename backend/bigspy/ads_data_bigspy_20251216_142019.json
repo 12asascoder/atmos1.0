@@ -1,0 +1,48 @@
+{
+  "summary": {
+    "aggregation_period": {
+      "start_date": "2025-12-09T08:50:19.139604Z",
+      "end_date": "2025-12-16T08:50:19.139604Z"
+    },
+    "metrics": {
+      "total_competitor_spend": {
+        "estimated_total": 0,
+        "currency": "USD",
+        "calculation_note": "Estimated from engagement heuristics"
+      },
+      "active_campaigns_count": {
+        "count": 0,
+        "calculation_note": "Inferred campaigns"
+      },
+      "total_impressions": {
+        "estimated_total": 0,
+        "calculation_note": "Estimated from engagement"
+      },
+      "average_ctr": {
+        "rate": 0.0,
+        "percentage": "0.00%",
+        "calculation_note": "Simulated CTR"
+      }
+    }
+  },
+  "advertisements": [],
+  "data_source_notes": {
+    "primary_source": "BigSpy CSV Export",
+    "estimated_fields": [
+      "impressions",
+      "spend",
+      "ctr"
+    ],
+    "limitations": [
+      "No official spend or impression data",
+      "Metrics are heuristic estimates"
+    ]
+  },
+  "generation_info": {
+    "generated_at": "2025-12-16T08:50:19.139753Z",
+    "competitors_analyzed": 7,
+    "total_ads_processed": 0,
+    "script_version": "2.0.0",
+    "region_scope": "Global"
+  }
+}
