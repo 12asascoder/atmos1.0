@@ -1,0 +1,63 @@
+{
+  "metadata": {
+    "generated_at": "2025-12-16T14:18:29.785459Z",
+    "companies_analyzed": [
+      "Nike",
+      "Adidas",
+      "Apple"
+    ],
+    "total_ads_collected": 0,
+    "ads_per_company_target": 10,
+    "country": "US",
+    "data_sources": [
+      "facebook_ad_library",
+      "google_ad_transparency"
+    ]
+  },
+  "summary_statistics": {
+    "total_estimated_spend": 0,
+    "total_estimated_impressions": 0,
+    "average_ads_per_company": 0.0,
+    "companies_with_ads": []
+  },
+  "company_breakdowns": [
+    {
+      "company": "Nike",
+      "total_ads_collected": 0,
+      "ads": [],
+      "collection_time": "2025-12-16T14:13:26.224605"
+    },
+    {
+      "company": "Adidas",
+      "total_ads_collected": 0,
+      "ads": [],
+      "collection_time": "2025-12-16T14:16:02.134426"
+    },
+    {
+      "company": "Apple",
+      "total_ads_collected": 0,
+      "ads": [],
+      "collection_time": "2025-12-16T14:18:23.784181"
+    }
+  ],
+  "data_quality_notes": {
+    "real_data_collected": [
+      "ad_creative_body (main ad text)",
+      "advertiser_name (when identifiable)",
+      "basic ad structure",
+      "call_to_action (when visible)"
+    ],
+    "estimated_simulated_data": [
+      "spend_ranges",
+      "impression_counts",
+      "click_estimates",
+      "demographic_distribution",
+      "targeting_criteria"
+    ],
+    "recommendations": [
+      "For complete spend data: Use official Meta API with ads_read permission",
+      "For click data: Requires platform API access (not publicly available)",
+      "For real-time data: Consider official transparency APIs"
+    ]
+  }
+}

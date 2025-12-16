@@ -1,0 +1,369 @@
+{
+  "summary": {
+    "aggregation_period": {
+      "start_date": "2025-12-09T13:55:55.212342Z",
+      "end_date": "2025-12-16T13:55:55.212374Z"
+    },
+    "metrics": {
+      "total_competitor_spend": {
+        "estimated_total": 1459.0,
+        "currency": "USD",
+        "calculation_note": "Sum of simulated spend midpoints"
+      },
+      "active_campaigns_count": {
+        "count": 1,
+        "calculation_note": "Estimated based on ad count"
+      },
+      "total_impressions": {
+        "estimated_total": 3572034,
+        "calculation_note": "Simulated impression data"
+      },
+      "average_ctr": {
+        "rate": 0.032,
+        "percentage": "3.2%",
+        "calculation_note": "SIMULATED: Based on industry benchmarks"
+      }
+    }
+  },
+  "advertisements": [
+    {
+      "unique_ad_identifier": "ad_meta_dc1fb7c0",
+      "platform_details": {
+        "publisher_platforms": [
+          "facebook"
+        ],
+        "platform_status": "ACTIVE"
+      },
+      "advertiser_info": {
+        "page_name": "Unknown Advertiser",
+        "advertiser_domain": "nike.com",
+        "page_id": "page_dc1fb7c0"
+      },
+      "creative_content": {
+        "ad_creative_body": "No creative text found",
+        "ad_creative_link_title": "View Details",
+        "ad_snapshot_url": "https://www.facebook.com/ads/archive/?id=278065946"
+      },
+      "delivery_timing": {
+        "ad_delivery_start_time": "2025-12-10T13:54:41.691425",
+        "estimated_daily_spend": 4571.09
+      },
+      "performance_metrics": {
+        "spend": {
+          "currency": "EUR",
+          "amount": "504-970",
+          "estimated_midpoint": 737.0,
+          "calculation_note": "SIMULATED: Real spend data requires clicking 'See details'"
+        },
+        "impressions": {
+          "lower_bound": 90607,
+          "upper_bound": 219858,
+          "estimated_midpoint": 155232,
+          "calculation_note": "SIMULATED: Real impressions require API access"
+        },
+        "clicks": {
+          "count": 5541,
+          "estimated_ctr": 0.024,
+          "calculation_note": "SIMULATED: Click data never displayed by Meta"
+        },
+        "calculated_ctr": 0.035,
+        "ctr_percentage": "3.5%",
+        "data_note": "Performance metrics are simulated/estimated"
+      },
+      "campaign_structure": {
+        "inferred_campaign_id": "campaign_dc1fb7c0",
+        "inferred_creative_variants": 4,
+        "inferred_ab_tests_active": 1,
+        "calculation_note": "Simulated campaign data"
+      },
+      "targeting_and_reach": {
+        "targeting_criteria": {
+          "languages": [
+            "en"
+          ]
+        },
+        "demographic_distribution": [
+          {
+            "age": "18-24",
+            "gender": "male",
+            "percentage": 18
+          },
+          {
+            "age": "18-24",
+            "gender": "female",
+            "percentage": 19
+          },
+          {
+            "age": "25-34",
+            "gender": "male",
+            "percentage": 18
+          },
+          {
+            "age": "25-34",
+            "gender": "female",
+            "percentage": 26
+          },
+          {
+            "age": "35-44",
+            "gender": "male",
+            "percentage": 18
+          },
+          {
+            "age": "35-44",
+            "gender": "female",
+            "percentage": 1
+          }
+        ]
+      },
+      "scraping_notes": {
+        "real_data": [
+          "ad_creative_body",
+          "page_name",
+          "snapshot_url"
+        ],
+        "simulated_data": [
+          "spend",
+          "impressions",
+          "clicks",
+          "demographics"
+        ],
+        "extracted_at": "2025-12-16T13:54:41.703695"
+      }
+    },
+    {
+      "unique_ad_identifier": "ad_meta_dc1fb7c0",
+      "platform_details": {
+        "publisher_platforms": [
+          "facebook"
+        ],
+        "platform_status": "ACTIVE"
+      },
+      "advertiser_info": {
+        "page_name": "Unknown Advertiser",
+        "advertiser_domain": "adidas.com",
+        "page_id": "page_dc1fb7c0"
+      },
+      "creative_content": {
+        "ad_creative_body": "No creative text found",
+        "ad_creative_link_title": "View Details",
+        "ad_snapshot_url": "https://www.facebook.com/ads/archive/?id=374475053"
+      },
+      "delivery_timing": {
+        "ad_delivery_start_time": "2025-11-22T13:55:18.811696",
+        "estimated_daily_spend": 3367.72
+      },
+      "performance_metrics": {
+        "spend": {
+          "currency": "GBP",
+          "amount": "235-444",
+          "estimated_midpoint": 339.5,
+          "calculation_note": "SIMULATED: Real spend data requires clicking 'See details'"
+        },
+        "impressions": {
+          "lower_bound": 49039,
+          "upper_bound": 217745,
+          "estimated_midpoint": 133392,
+          "calculation_note": "SIMULATED: Real impressions require API access"
+        },
+        "clicks": {
+          "count": 3411,
+          "estimated_ctr": 0.03,
+          "calculation_note": "SIMULATED: Click data never displayed by Meta"
+        },
+        "calculated_ctr": 0.035,
+        "ctr_percentage": "3.5%",
+        "data_note": "Performance metrics are simulated/estimated"
+      },
+      "campaign_structure": {
+        "inferred_campaign_id": "campaign_dc1fb7c0",
+        "inferred_creative_variants": 4,
+        "inferred_ab_tests_active": 1,
+        "calculation_note": "Simulated campaign data"
+      },
+      "targeting_and_reach": {
+        "targeting_criteria": {
+          "languages": [
+            "en"
+          ]
+        },
+        "demographic_distribution": [
+          {
+            "age": "18-24",
+            "gender": "male",
+            "percentage": 30
+          },
+          {
+            "age": "18-24",
+            "gender": "female",
+            "percentage": 15
+          },
+          {
+            "age": "25-34",
+            "gender": "male",
+            "percentage": 17
+          },
+          {
+            "age": "25-34",
+            "gender": "female",
+            "percentage": 9
+          },
+          {
+            "age": "35-44",
+            "gender": "male",
+            "percentage": 28
+          },
+          {
+            "age": "35-44",
+            "gender": "female",
+            "percentage": 1
+          }
+        ]
+      },
+      "scraping_notes": {
+        "real_data": [
+          "ad_creative_body",
+          "page_name",
+          "snapshot_url"
+        ],
+        "simulated_data": [
+          "spend",
+          "impressions",
+          "clicks",
+          "demographics"
+        ],
+        "extracted_at": "2025-12-16T13:55:18.850261"
+      }
+    },
+    {
+      "unique_ad_identifier": "ad_meta_dc1fb7c0",
+      "platform_details": {
+        "publisher_platforms": [
+          "facebook"
+        ],
+        "platform_status": "ACTIVE"
+      },
+      "advertiser_info": {
+        "page_name": "Unknown Advertiser",
+        "advertiser_domain": "apple.com",
+        "page_id": "page_dc1fb7c0"
+      },
+      "creative_content": {
+        "ad_creative_body": "No creative text found",
+        "ad_creative_link_title": "View Details",
+        "ad_snapshot_url": "https://www.facebook.com/ads/archive/?id=521655477"
+      },
+      "delivery_timing": {
+        "ad_delivery_start_time": "2025-12-02T13:55:50.090158",
+        "estimated_daily_spend": 2242.64
+      },
+      "performance_metrics": {
+        "spend": {
+          "currency": "EUR",
+          "amount": "255-510",
+          "estimated_midpoint": 382.5,
+          "calculation_note": "SIMULATED: Real spend data requires clicking 'See details'"
+        },
+        "impressions": {
+          "lower_bound": 15550,
+          "upper_bound": 76327,
+          "estimated_midpoint": 45938,
+          "calculation_note": "SIMULATED: Real impressions require API access"
+        },
+        "clicks": {
+          "count": 7585,
+          "estimated_ctr": 0.05,
+          "calculation_note": "SIMULATED: Click data never displayed by Meta"
+        },
+        "calculated_ctr": 0.035,
+        "ctr_percentage": "3.5%",
+        "data_note": "Performance metrics are simulated/estimated"
+      },
+      "campaign_structure": {
+        "inferred_campaign_id": "campaign_dc1fb7c0",
+        "inferred_creative_variants": 2,
+        "inferred_ab_tests_active": 2,
+        "calculation_note": "Simulated campaign data"
+      },
+      "targeting_and_reach": {
+        "targeting_criteria": {
+          "languages": [
+            "en"
+          ]
+        },
+        "demographic_distribution": [
+          {
+            "age": "18-24",
+            "gender": "male",
+            "percentage": 18
+          },
+          {
+            "age": "18-24",
+            "gender": "female",
+            "percentage": 11
+          },
+          {
+            "age": "25-34",
+            "gender": "male",
+            "percentage": 22
+          },
+          {
+            "age": "25-34",
+            "gender": "female",
+            "percentage": 22
+          },
+          {
+            "age": "35-44",
+            "gender": "male",
+            "percentage": 27
+          }
+        ]
+      },
+      "scraping_notes": {
+        "real_data": [
+          "ad_creative_body",
+          "page_name",
+          "snapshot_url"
+        ],
+        "simulated_data": [
+          "spend",
+          "impressions",
+          "clicks",
+          "demographics"
+        ],
+        "extracted_at": "2025-12-16T13:55:50.106909"
+      }
+    }
+  ],
+  "data_source_notes": {
+    "actually_extracted_via_scraping": [
+      "ad_creative_body (partial text)",
+      "page_name (sometimes)",
+      "ad_snapshot_url (when available)",
+      "basic ad structure"
+    ],
+    "simulated_estimated_data": [
+      "spend.amount ranges",
+      "impressions.lower_bound/upper_bound",
+      "clicks.count",
+      "calculated_ctr",
+      "demographic_distribution",
+      "targeting_criteria",
+      "campaign_structure"
+    ],
+    "critical_limitations": [
+      "Spend/impression data requires clicking 'See details' on each ad",
+      "Demographic data is in interactive charts (not scrapeable)",
+      "Click data is NEVER displayed publicly",
+      "Real campaign IDs are not exposed",
+      "A/B test status is not visible"
+    ],
+    "recommendation_for_complete_data": "Use Meta Ad Library API with ads_read permission"
+  },
+  "generation_info": {
+    "generated_at": "2025-12-16T13:55:55.212424Z",
+    "competitors_analyzed": 3,
+    "total_ads_processed": 3,
+    "script_version": "1.0.0",
+    "data_quality": "mixed_real_and_simulated"
+  }
+}
