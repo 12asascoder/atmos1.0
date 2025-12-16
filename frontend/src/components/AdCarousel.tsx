@@ -1,13 +1,13 @@
+// src/components/AdCarousel.tsx
 import React, { useRef } from 'react';
 import AdCard from './AdCard';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AdCarouselProps {
   category: 'recommended' | 'trending' | 'top';
-  onCardClick: (ad: any) => void; // Add onCardClick prop
 }
 
-const AdCarousel: React.FC<AdCarouselProps> = ({ category, onCardClick }) => {
+const AdCarousel: React.FC<AdCarouselProps> = ({ category }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ads = [
@@ -98,11 +98,7 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ category, onCardClick }) => {
         style={{ scrollbarWidth: 'none' }}
       >
         {ads.map((ad) => (
-          <AdCard 
-            key={ad.id} 
-            ad={ad} 
-            onClick={() => onCardClick(ad)}
-          />
+          <AdCard key={ad.id} ad={ad} />
         ))}
       </div>
 

@@ -16,9 +16,13 @@ import {
   Download,
   Wifi,
   WifiOff,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  X,
+  AlertCircle
 } from 'lucide-react';
 import { fetchSummaryMetrics, fetchDailyMetrics, testDatabaseConnection, type SummaryMetrics, type AdCardData } from '../services/api';
+import { addCompetitor, type NewCompetitorInput } from '../services/competitors';
 
 interface PlatformSpendData {
   platform: string;
@@ -39,6 +43,19 @@ const AdSurveillance = () => {
     dailyCount: number;
     error?: string;
   } | null>(null);
+  
+  // Competitor modal state
+  const [showAddCompetitorModal, setShowAddCompetitorModal] = useState(false);
+  const [newCompetitor, setNewCompetitor] = useState<NewCompetitorInput>({
+    name: '',
+    domain: '',
+    industry: '',
+    estimated_monthly_spend: 0,
+    social_handles: {}
+  });
+  const [addingCompetitor, setAddingCompetitor] = useState(false);
+  const [addCompetitorError, setAddCompetitorError] = useState<string | null>(null);
+  const [addCompetitorSuccess, setAddCompetitorSuccess] = useState(false);
   
   // Chart data state
   const [spendTrendData, setSpendTrendData] = useState<number[]>([26000, 19500, 13000, 6500, 0, 0, 0]);
@@ -79,6 +96,57 @@ const AdSurveillance = () => {
     } else {
       console.warn('⚠️ Database Status:', result.error);
     }
+  };
+
+  const handleAddCompetitor = async () => {
+    if (!newCompetitor.name.trim()) {
+      setAddCompetitorError('Competitor name is required');
+      return;
+    }
+
+    setAddingCompetitor(true);
+    setAddCompetitorError(null);
+    
+    try {
+      await addCompetitor(newCompetitor);
+      setAddCompetitorSuccess(true);
+      
+      // Reset form
+      setNewCompetitor({
+        name: '',
+        domain: '',
+        industry: '',
+        estimated_monthly_spend: 0,
+        social_handles: {}
+      });
+      
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        setShowAddCompetitorModal(false);
+        setAddCompetitorSuccess(false);
+      }, 2000);
+      
+      // Refresh data to show new competitor
+      await loadData();
+      
+    } catch (error: any) {
+      console.error('Error adding competitor:', error);
+      setAddCompetitorError(error.message || 'Failed to add competitor. Please try again.');
+    } finally {
+      setAddingCompetitor(false);
+    }
+  };
+
+  const resetCompetitorForm = () => {
+    setNewCompetitor({
+      name: '',
+      domain: '',
+      industry: '',
+      estimated_monthly_spend: 0,
+      social_handles: {}
+    });
+    setAddCompetitorError(null);
+    setAddCompetitorSuccess(false);
   };
 
   useEffect(() => {
@@ -151,6 +219,141 @@ const AdSurveillance = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Add Competitor Modal */}
+      {showAddCompetitorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-semibold text-gray-900">Add New Competitor</h3>
+                <button 
+                  onClick={() => {
+                    setShowAddCompetitorModal(false);
+                    resetCompetitorForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {addCompetitorSuccess ? (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div className="w-8 h-8 text-green-600">✓</div>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Competitor Added Successfully!</h4>
+                  <p className="text-gray-600">The competitor has been added to the surveillance system.</p>
+                  <p className="text-sm text-gray-500 mt-2">Modal will close automatically...</p>
+                </div>
+              ) : (
+                <>
+                  {addCompetitorError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
+                      <AlertCircle className="w-5 h-5 text-red-500 mr-2 mt-0.5 flex-shrink-0" />
+                      <p className="text-red-700 text-sm">{addCompetitorError}</p>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Competitor Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompetitor.name}
+                        onChange={(e) => setNewCompetitor({...newCompetitor, name: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., Nike Running"
+                        disabled={addingCompetitor}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Website Domain
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompetitor.domain}
+                        onChange={(e) => setNewCompetitor({...newCompetitor, domain: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., nike.com"
+                        disabled={addingCompetitor}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Industry
+                      </label>
+                      <input
+                        type="text"
+                        value={newCompetitor.industry}
+                        onChange={(e) => setNewCompetitor({...newCompetitor, industry: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., Sportswear, E-commerce"
+                        disabled={addingCompetitor}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Estimated Monthly Ad Spend ($)
+                      </label>
+                      <input
+                        type="number"
+                        value={newCompetitor.estimated_monthly_spend || ''}
+                        onChange={(e) => setNewCompetitor({
+                          ...newCompetitor, 
+                          estimated_monthly_spend: e.target.value ? parseInt(e.target.value) : 0
+                        })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g., 50000"
+                        disabled={addingCompetitor}
+                      />
+                    </div>
+                    
+                    <div className="pt-4 border-t border-gray-200">
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          onClick={() => {
+                            setShowAddCompetitorModal(false);
+                            resetCompetitorForm();
+                          }}
+                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                          disabled={addingCompetitor}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleAddCompetitor}
+                          disabled={addingCompetitor || !newCompetitor.name.trim()}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        >
+                          {addingCompetitor ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                              Adding...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Competitor
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
@@ -177,6 +380,15 @@ const AdSurveillance = () => {
                 </>
               )}
             </div>
+
+            {/* Add Competitor Button */}
+            <button
+              onClick={() => setShowAddCompetitorModal(true)}
+              className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Competitor
+            </button>
 
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -549,6 +761,15 @@ const AdSurveillance = () => {
           Monitoring {dailyMetrics.length} active ads across {platformDistribution.length} platforms
           {dbStatus === 'disconnected' && ' • Using demo data'}
         </p>
+        <div className="mt-2">
+          <button
+            onClick={() => setShowAddCompetitorModal(true)}
+            className="inline-flex items-center text-blue-600 hover:text-blue-800 hover:underline text-sm"
+          >
+            <Plus className="w-3 h-3 mr-1" />
+            Add a new competitor to surveillance
+          </button>
+        </div>
       </div>
     </div>
   );

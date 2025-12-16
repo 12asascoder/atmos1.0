@@ -1,4 +1,6 @@
+// src/components/AdCard.tsx
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface AdCardProps {
   ad: {
@@ -11,14 +13,19 @@ interface AdCardProps {
     tags: string[];
     genre?: string;
   };
-  onClick: () => void;
 }
 
-const AdCard: React.FC<AdCardProps> = ({ ad, onClick }) => {
+const AdCard: React.FC<AdCardProps> = ({ ad }) => {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    navigate(`/ads/${ad.id}`);
+  };
+
   return (
     <div 
       className="relative w-64 flex-shrink-0 cursor-pointer transform transition-transform hover:scale-[1.02]"
-      onClick={onClick}
+      onClick={handleClick}
     >
       <div className="relative overflow-hidden rounded-xl bg-white shadow-md transition-all duration-300 hover:shadow-xl">
         {/* Promoted Badge - Top Left */}
