@@ -5,7 +5,7 @@ import AdCarousel from '../components/AdCarousel';
 import AdDetailModal from '../components/AdDetailModal'; // Add this import
 import QuickFilters from '../components/QuickFilters';
 import { colors } from '../styles/colors';
-import Footer from '@/components/Footer';
+import Footer from '../components/Footer';
 
 const Home: React.FC = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });

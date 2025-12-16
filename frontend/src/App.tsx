@@ -7,6 +7,7 @@ import SignUpPage from './pages/Signup';
 import Home from './pages/Home';
 import OnboardingPage from './components/OnBoarding';
 import AutoCreate from './pages/AutoCreate';
+import AdSurveillance from './components/AdSurveillance';
 import AdDetailPage from './pages/AdDetailPage';
 
 function App() {
@@ -71,11 +72,22 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        
         <Route 
           path="/auto-create" 
           element={
             <ProtectedRoute>
               <AutoCreate />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* NEW: Ad Surveillance Dashboard */}
+        <Route 
+          path="/ad-surveillance" 
+          element={
+            <ProtectedRoute>
+              <AdSurveillance />
             </ProtectedRoute>
           } 
         />

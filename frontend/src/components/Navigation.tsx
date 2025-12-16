@@ -62,7 +62,7 @@ const Navigation: React.FC = () => {
     { name: 'Home', link: '/home' },
     { name: 'Command Center', link: '/command-center' },
     { name: 'Performance', link: '/performance' },
-    { name: 'Audience Intel', link: '/audience' },
+    { name: 'Ad Surveillance', link: '/ad-surveillance' },
     { name: 'Auto Create', link: '/auto-create' }
   ];
 
