@@ -61,7 +61,7 @@ const Navigation: React.FC = () => {
   const navItems = [
     { name: 'Home', link: '/home' },
     { name: 'Command Center', link: '/command-center' },
-    { name: 'Performance', link: '/performance' },
+    { name: 'Targeting Intel', link: '/targeting_intel' },
     { name: 'Ad Surveillance', link: '/ad-surveillance' },
     { name: 'Auto Create', link: '/auto-create' }
   ];
