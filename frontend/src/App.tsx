@@ -10,6 +10,8 @@ import OnboardingPage from './components/OnBoarding';
 import AutoCreate from './pages/AutoCreate';
 import AdSurveillance from './components/AdSurveillance';
 import AdDetailPage from './pages/AdDetailPage';
+import VideoAnalysis from './pages/VideoAnalysis';
+
 
 /* ✅ NEW PAGE IMPORT */
 import TargetingIntel from './pages/targetingIntel';
@@ -42,6 +44,17 @@ function App() {
             </PublicRoute>
           }
         />
+
+
+        <Route 
+          path="/video-analysis" 
+          element={
+            <ProtectedRoute>
+              <VideoAnalysis />
+            </ProtectedRoute>
+          } 
+        />
+
 
         {/* ONBOARDING ROUTE */}
         <Route

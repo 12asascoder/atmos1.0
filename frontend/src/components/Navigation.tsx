@@ -63,7 +63,8 @@ const Navigation: React.FC = () => {
     { name: 'Command Center', link: '/command-center' },
     { name: 'Targeting Intel', link: '/targeting_intel' },
     { name: 'Ad Surveillance', link: '/ad-surveillance' },
-    { name: 'Auto Create', link: '/auto-create' }
+    { name: 'Auto Create', link: '/auto-create' },
+    { name: 'Reverse Engineering', link: '/video-analysis'}
   ];
 
   const handleNavClick = (link: string) => {

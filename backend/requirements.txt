@@ -6,3 +6,43 @@ pydantic
 pydantic-settings
 python-dotenv
 requests
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic
+pydantic-settings
+python-dotenv
+requests
+# Core
+python-dotenv
+tqdm
+requests
+flask
+flask-cors
+
+# Video / Audio Processing
+opencv-python
+numpy
+moviepy
+imageio-ffmpeg
+soundfile
+
+# ML / CV
+scikit-learn
+pillow
+
+# Scene Detection
+PySceneDetect
+
+# Speech-to-Text
+openai-whisper
+
+# OCR
+pytesseract
+
+# Face Recognition
+face-recognition
+
+# TOON encoding
+python-toon
