@@ -1,401 +1,581 @@
-import json
-import subprocess
-import os
-import imageio_ffmpeg
+#!/usr/bin/env python3
+"""
+analyze_ads_toon.py
 
-# Force Whisper to use the bundled ffmpeg from imageio
-os.environ["FFMPEG_BINARY"] = imageio_ffmpeg.get_ffmpeg_exe()
-import subprocess
-import requests
-from urllib.parse import urljoin
-from bs4 import BeautifulSoup
+Ad analysis pipeline:
+- Uses screen-recorded videos (.webm/.mp4) AND images from raw_videos
+- For VIDEOS: audio extraction, Whisper transcription, scene detection,
+  frame sampling, color palette extraction, face detection (NO OCR)
+- For IMAGES: color palette extraction, OCR text extraction, face detection
+- Saves per-ad analysis in TOON format
+- Works WITHOUT metadata JSON - analyzes all videos and images in raw_videos directory
+"""
+
+import os
+import numbers
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+from datetime import datetime
+
+import imageio_ffmpeg
+os.environ["FFMPEG_BINARY"] = imageio_ffmpeg.get_ffmpeg_exe()
 
 import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip
 from PIL import Image
-from sklearn.cluster import KMeans
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
+from sklearn.cluster import KMeans
+import soundfile as sf
 import whisper
+import pytesseract  # pip install pytesseract
+# Note: Also requires tesseract-ocr system package installed
+
+from toon import encode, decode  # pip install python-toon
+
+# Face detection
+import face_recognition  # pip install face-recognition
 
 # ===========================
-# Config
+# Paths & Config
 # ===========================
 
-# This file should live in: backend/ml/scripts/analyze_ads.py
-SCRIPT_DIR = Path(__file__).resolve().parent               # .../backend/ml/scripts
-ML_DIR = SCRIPT_DIR.parent                                 # .../backend/ml
-DATA_DIR = ML_DIR / "data"                                 # .../backend/ml/data
-RAW_VIDEO_DIR = DATA_DIR / "raw_videos"                    # .../backend/ml/data/raw_videos
-ANALYSIS_DIR = DATA_DIR / "analysis"                       # .../backend/ml/data/analysis
+SCRIPT_DIR = Path(__file__).resolve().parent
+ML_DIR = SCRIPT_DIR.parent
+DATA_DIR = ML_DIR / "data"
 
-RAW_VIDEO_DIR.mkdir(exist_ok=True, parents=True)
-ANALYSIS_DIR.mkdir(exist_ok=True, parents=True)
+RAW_VIDEO_DIR = DATA_DIR / "raw_videos"
+ANALYSIS_DIR = DATA_DIR / "analysis"
 
-# Hardcode your JSON now; later you can parametrize or auto-detect latest
-ADS_JSON_PATH = DATA_DIR / "ads_general_US_20251210_164809.json"
+RAW_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Whisper model: "tiny", "base", "small", "medium", "large"
 WHISPER_MODEL_NAME = "small"
 
+SUPPORTED_VIDEO_EXTS = {".webm", ".mp4", ".mkv", ".avi", ".mov"}
+SUPPORTED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
 
 # ===========================
 # Utilities
 # ===========================
 
-def load_ads(json_path: Path) -> List[Dict[str, Any]]:
-    """Load ads list from the JSON file created by your fetch script."""
-    with open(json_path, "r", encoding="utf-8") as f:
-        ads = json.load(f)
-    print(f"[INFO] Loaded {len(ads)} ads from {json_path}")
-    return ads
+def is_video_file(file_path: Path) -> bool:
+    """Check if file is a video based on extension"""
+    return file_path.suffix.lower() in SUPPORTED_VIDEO_EXTS
 
 
-def get_video_url_from_snapshot(snapshot_url: str) -> str | None:
-    """
-    Given a Meta ad_snapshot_url (HTML render page), try to find the actual video URL.
-    Returns a direct video URL (likely .mp4) or None if not found.
-    """
-    print(f"[INFO] Resolving media URL from snapshot: {snapshot_url}")
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-
-    resp = requests.get(snapshot_url, headers=headers)
-    resp.raise_for_status()
-
-    content_type = resp.headers.get("Content-Type", "")
-    # In some rare cases, snapshot_url might already be a direct video
-    if content_type.startswith("video"):
-        print("[INFO] Snapshot URL is already a video stream.")
-        return snapshot_url
-
-    # Otherwise, it's HTML
-    html = resp.text
-    soup = BeautifulSoup(html, "html.parser")
-
-    # Try <video> and <source> tags first
-    for tag in soup.find_all(["video", "source"]):
-        src = tag.get("src") or tag.get("data-src")
-        if src and ".mp4" in src:
-            video_url = urljoin(snapshot_url, src)
-            print(f"[INFO] Found video src in HTML: {video_url}")
-            return video_url
-
-    # Fallback: sometimes FB uses <img> for animated things; we skip those for now
-    print("[WARN] Could not find a video URL inside snapshot HTML.")
-    return None
+def is_image_file(file_path: Path) -> bool:
+    """Check if file is an image based on extension"""
+    return file_path.suffix.lower() in SUPPORTED_IMAGE_EXTS
 
 
-def download_video(ad: Dict[str, Any]) -> Path:
-    """
-    Download ad video by:
-    - Resolving the real video URL from snapshot_url HTML
-    - Saving it under raw_videos/<ad_id>.mp4
-
-    If an existing file is invalid (HTML, corrupt, zero duration), it will be deleted and re-downloaded.
-    """
-    ad_id = ad["ad_id"]
-    snapshot_url = ad["snapshot_url"]
-    out_path = RAW_VIDEO_DIR / f"{ad_id}.mp4"
-
-    # If file exists, check if it's a valid video (non-zero duration).
-    if out_path.exists():
-        try:
-            clip = VideoFileClip(str(out_path))
-            duration = clip.duration
-            clip.close()
-            if duration and duration > 0:
-                print(f"[SKIP] Video already downloaded for ad {ad_id}: {out_path} (duration={duration:.2f}s)")
-                return out_path
-            else:
-                print(f"[WARN] Existing video has zero duration, re-downloading: {out_path}")
-        except Exception:
-            print(f"[WARN] Existing video file is invalid or not a real video, re-downloading: {out_path}")
-
-        # Delete bad file
-        try:
-            out_path.unlink()
-        except OSError:
-            print(f"[WARN] Could not delete invalid file: {out_path}")
-
-    # Resolve the actual video URL from the snapshot HTML
-    video_url = get_video_url_from_snapshot(snapshot_url)
-    if not video_url:
-        raise RuntimeError(f"Could not find a video URL inside snapshot for ad {ad_id}")
-
-    print(f"[INFO] Downloading video for ad {ad_id} from {video_url}")
-    resp = requests.get(video_url, stream=True)
-    resp.raise_for_status()
-
-    with open(out_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=1024 * 1024):
-            if chunk:
-                f.write(chunk)
-
-    print(f"[OK] Saved video to {out_path}")
-    return out_path
-
+def get_video_metadata(video_path: Path) -> Dict[str, Any]:
+    """Extract basic metadata from video file"""
+    try:
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        duration = frame_count / fps if fps > 0 else 0
+        cap.release()
+        
+        file_stats = video_path.stat()
+        
+        return {
+            "duration_seconds": duration,
+            "fps": fps,
+            "frame_count": frame_count,
+            "resolution": {"width": width, "height": height},
+            "file_size_mb": file_stats.st_size / (1024 * 1024),
+            "modified_time": datetime.fromtimestamp(file_stats.st_mtime).isoformat()
+        }
+    except Exception as e:
+        print(f"[WARN] Could not extract metadata: {e}")
+        return {}
 
 
 def extract_audio(video_path: Path) -> Path:
-    """
-    Extract audio using MoviePy (no direct ffmpeg subprocess call).
-    Returns path to WAV file (16kHz, mono).
-    """
     audio_path = video_path.with_suffix(".wav")
     if audio_path.exists():
-        print(f"[SKIP] Audio already extracted: {audio_path}")
         return audio_path
 
-    print(f"[INFO] Extracting audio using MoviePy: {video_path.name}")
     clip = VideoFileClip(str(video_path))
-
     if clip.audio is None:
         clip.close()
-        raise RuntimeError("No audio track found in this video.")
+        raise RuntimeError("No audio track found")
 
     clip.audio.write_audiofile(
         str(audio_path),
         fps=16000,
         nbytes=2,
         codec="pcm_s16le",
+        verbose=False,
+        logger=None,
     )
     clip.close()
-
-    print(f"[OK] Audio extracted to {audio_path}")
     return audio_path
 
-import soundfile as sf
-import numpy as np
 
 def transcribe_audio_whisper(audio_path: Path, model) -> Dict[str, Any]:
-    """
-    Read WAV directly with soundfile and pass raw audio array to Whisper.
-    This avoids Whisper calling ffmpeg on Windows.
-    """
-    print(f"[INFO] Transcribing audio with Whisper (direct WAV): {audio_path.name}")
-
-    # Read WAV file
     data, sr = sf.read(str(audio_path), dtype="float32")
-
-    # If stereo, convert to mono
-    if len(data.shape) > 1:
+    if data.ndim > 1:
         data = np.mean(data, axis=1)
 
-    target_sr = 16000
+    if sr != 16000:
+        import resampy
+        data = resampy.resample(data, sr, 16000)
 
-    # Resample if needed
-    if sr != target_sr:
-        try:
-            import resampy
-            data = resampy.resample(data, sr, target_sr)
-        except Exception:
-            raise RuntimeError(
-                f"Audio is {sr}Hz but Whisper needs 16000Hz. "
-                "Install resampy or scipy for resampling."
-            )
-
-    # Transcribe from raw numpy array (no ffmpeg subprocess)
-    result = model.transcribe(data, word_timestamps=True)
-    return result
-
+    return model.transcribe(data, word_timestamps=True)
 
 
 def detect_scenes(video_path: Path, threshold: float = 27.0) -> List[Dict[str, float]]:
-    """Use PySceneDetect to detect scene cuts; returns list of dicts with start/end in seconds."""
-    print(f"[INFO] Detecting scenes for {video_path.name}")
     video_manager = VideoManager([str(video_path)])
     scene_manager = SceneManager()
     scene_manager.add_detector(ContentDetector(threshold=threshold))
 
     video_manager.start()
     scene_manager.detect_scenes(frame_source=video_manager)
-    scene_list = scene_manager.get_scene_list()
+    scenes_raw = scene_manager.get_scene_list()
     video_manager.release()
 
-    scenes = []
-    for start_time, end_time in scene_list:
-        scenes.append({
-            "start_sec": start_time.get_seconds(),
-            "end_sec": end_time.get_seconds()
-        })
-
-    print(f"[OK] Detected {len(scenes)} scenes")
-    return scenes
+    return [
+        {"start_sec": s.get_seconds(), "end_sec": e.get_seconds()}
+        for s, e in scenes_raw
+    ]
 
 
 def sample_frames(video_path: Path, num_frames: int = 5) -> List[Image.Image]:
-    """
-    Sample a few frames evenly across the video using OpenCV and return as PIL Images.
-    """
-    print(f"[INFO] Sampling {num_frames} frames from {video_path.name}")
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
-        raise RuntimeError(f"Could not open video: {video_path}")
+        raise RuntimeError("Cannot open video")
 
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if frame_count == 0:
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total == 0:
         cap.release()
         return []
 
-    indices = np.linspace(0, frame_count - 1, num_frames, dtype=int)
+    indices = np.linspace(0, total - 1, num_frames, dtype=int)
     frames = []
 
     for idx in indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
         ret, frame = cap.read()
-        if not ret:
-            continue
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(frame_rgb)
-        frames.append(pil_img)
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(Image.fromarray(frame))
 
     cap.release()
-    print(f"[OK] Sampled {len(frames)} frames")
     return frames
 
 
-def extract_palette_from_image(image: Image.Image, k: int = 4) -> List[Dict[str, float]]:
-    """
-    Extract dominant colors from a single image using KMeans, return list of {hex, ratio}.
-    """
-    img = image.resize((256, 256))
-    data = np.array(img).reshape(-1, 3)
-
-    # KMeans can be a bit slow; keep k small and n_init small for speed.
-    kmeans = KMeans(n_clusters=k, n_init=3, random_state=42)
-    kmeans.fit(data)
-
-    centers = kmeans.cluster_centers_.astype(int)
-    labels = kmeans.labels_
-
-    counts = np.bincount(labels)
-    total = len(labels)
-
-    palette = []
-    for center, count in zip(centers, counts):
-        r, g, b = center
-        ratio = float(count) / float(total)
-        hex_code = "#{:02X}{:02X}{:02X}".format(r, g, b)
-        palette.append({"hex": hex_code, "ratio": ratio})
-
-    palette.sort(key=lambda x: x["ratio"], reverse=True)
-    return palette
-
-
 def extract_palette_from_frames(frames: List[Image.Image], k: int = 4) -> List[Dict[str, float]]:
-    """
-    Compute a global palette across multiple frames by concatenating pixels.
-    """
     if not frames:
         return []
 
-    # Stack all frames into one big array (downsampled)
-    pixels_list = []
+    pixels = []
     for img in frames:
-        img_small = img.resize((128, 128))
-        pixels_list.append(np.array(img_small).reshape(-1, 3))
+        # Convert to RGB if not already (handles grayscale, RGBA, etc.)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        small = img.resize((128, 128))
+        img_array = np.array(small)
+        
+        # Ensure we have 3 channels
+        if img_array.ndim == 2:  # Grayscale
+            img_array = np.stack([img_array] * 3, axis=-1)
+        elif img_array.shape[2] == 4:  # RGBA
+            img_array = img_array[:, :, :3]
+        
+        pixels.append(img_array.reshape(-1, 3))
 
-    all_pixels = np.vstack(pixels_list)
-
+    pixels = np.vstack(pixels)
     kmeans = KMeans(n_clusters=k, n_init=3, random_state=42)
-    kmeans.fit(all_pixels)
-
+    labels = kmeans.fit_predict(pixels)
     centers = kmeans.cluster_centers_.astype(int)
-    labels = kmeans.labels_
 
     counts = np.bincount(labels)
-    total = len(labels)
+    total = counts.sum()
 
     palette = []
-    for center, count in zip(centers, counts):
-        r, g, b = center
-        ratio = float(count) / float(total)
-        hex_code = "#{:02X}{:02X}{:02X}".format(r, g, b)
-        palette.append({"hex": hex_code, "ratio": ratio})
+    for c, cnt in zip(centers, counts):
+        r, g, b = c
+        palette.append({
+            "hex": f"#{r:02X}{g:02X}{b:02X}",
+            "ratio": float(cnt) / float(total)
+        })
 
-    palette.sort(key=lambda x: x["ratio"], reverse=True)
-    return palette
+    return sorted(palette, key=lambda x: x["ratio"], reverse=True)
 
 
-def analyse_single_ad(ad: Dict[str, Any], whisper_model) -> Dict[str, Any]:
-    """
-    Full analysis pipeline for one ad:
-      - download video
-      - extract audio + transcript
-      - detect scenes
-      - sample frames + color palette
+# ===========================
+# Face Detection
+# ===========================
 
-    Returns a dict ready to be saved as JSON (raw features for now).
-    """
-    ad_id = ad.get("ad_id")
-    page_name = ad.get("page_name")
-    snapshot_url = ad.get("snapshot_url")
-
-    print("\n" + "=" * 60)
-    print(f"[AD] {ad_id} | {page_name}")
-    print("=" * 60)
-
-    # 1. Download video (or reuse existing)
-    video_path = download_video(ad)
-
-    # 2. Extract audio & transcribe
-    audio_path = extract_audio(video_path)
-    transcript_result = transcribe_audio_whisper(audio_path, whisper_model)
-
-    # 3. Detect scenes
-    scenes = detect_scenes(video_path)
-
-    # 4. Sample frames & extract palette
-    frames = sample_frames(video_path, num_frames=5)
-    palette = extract_palette_from_frames(frames, k=4)
-
-    # 5. Build analysis dict (raw data; LLM scoring can be separate step)
-    analysis = {
-        "ad_id": ad_id,
-        "page_id": ad.get("page_id"),
-        "page_name": page_name,
-        "snapshot_url": snapshot_url,
-        "start_time": ad.get("start_time"),
-        "stop_time": ad.get("stop_time"),
-        "video_path": str(video_path),
-        "audio_path": str(audio_path),
-
-        "transcript": {
-            "text": transcript_result.get("text", ""),
-            "segments": [
-                {
-                    "start": seg.get("start"),
-                    "end": seg.get("end"),
-                    "text": seg.get("text", "").strip()
+def detect_faces_in_image(image: Image.Image) -> Dict[str, Any]:
+    """Detect faces in a single image using face_recognition"""
+    try:
+        # Convert to RGB if not already (handles all formats)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Convert PIL image to numpy array (RGB) with uint8 dtype
+        img_array = np.array(image, dtype=np.uint8)
+        
+        # Ensure it's 8-bit RGB
+        if img_array.ndim == 2:  # Grayscale
+            img_array = np.stack([img_array] * 3, axis=-1)
+        elif img_array.shape[2] == 4:  # RGBA
+            img_array = img_array[:, :, :3]
+        
+        # Detect face locations
+        face_locations = face_recognition.face_locations(img_array)
+        
+        # Get face encodings (can be used for face recognition/comparison)
+        face_encodings = face_recognition.face_encodings(img_array, face_locations)
+        
+        faces_data = []
+        for idx, (top, right, bottom, left) in enumerate(face_locations):
+            faces_data.append({
+                'face_id': idx,
+                'bbox': {
+                    'top': top,
+                    'right': right,
+                    'bottom': bottom,
+                    'left': left,
+                    'width': right - left,
+                    'height': bottom - top
                 }
-                for seg in transcript_result.get("segments", [])
-            ],
-        },
+            })
+        
+        return {
+            'face_count': len(face_locations),
+            'faces': faces_data
+        }
+    except Exception as e:
+        print(f"[WARN] Face detection failed: {e}")
+        return {
+            'face_count': 0,
+            'faces': [],
+            'error': str(e)
+        }
 
-        "scenes": scenes,
 
-        "color_palette": palette,
+def detect_faces_in_frames(frames: List[Image.Image]) -> Dict[str, Any]:
+    """Detect unique faces across all sampled frames (count each person once)"""
+    all_faces = []
+    unique_face_encodings = []
+    unique_face_count = 0
+    max_faces_in_frame = 0
+    
+    for idx, frame in enumerate(frames):
+        try:
+            # Convert to RGB if not already
+            if frame.mode != 'RGB':
+                frame = frame.convert('RGB')
+            
+            # Convert PIL image to numpy array (RGB) with uint8 dtype
+            img_array = np.array(frame, dtype=np.uint8)
+            
+            # Ensure it's 8-bit RGB
+            if img_array.ndim == 2:  # Grayscale
+                img_array = np.stack([img_array] * 3, axis=-1)
+            elif img_array.shape[2] == 4:  # RGBA
+                img_array = img_array[:, :, :3]
+            
+            # Detect face locations
+            face_locations = face_recognition.face_locations(img_array)
+            face_count = len(face_locations)
+            
+            if face_count > 0:
+                # Get face encodings for comparison
+                face_encodings = face_recognition.face_encodings(img_array, face_locations)
+                
+                frame_faces = []
+                for face_idx, (encoding, location) in enumerate(zip(face_encodings, face_locations)):
+                    top, right, bottom, left = location
+                    
+                    # Check if this is a new unique face
+                    is_new_face = True
+                    for known_encoding in unique_face_encodings:
+                        # Compare with known faces (tolerance of 0.6 is default)
+                        matches = face_recognition.compare_faces([known_encoding], encoding, tolerance=0.6)
+                        if matches[0]:
+                            is_new_face = False
+                            break
+                    
+                    # If it's a new face, add to unique faces
+                    if is_new_face:
+                        unique_face_encodings.append(encoding)
+                        unique_face_count += 1
+                    
+                    frame_faces.append({
+                        'face_id': face_idx,
+                        'is_new_unique_face': is_new_face,
+                        'bbox': {
+                            'top': top,
+                            'right': right,
+                            'bottom': bottom,
+                            'left': left,
+                            'width': right - left,
+                            'height': bottom - top
+                        }
+                    })
+                
+                all_faces.append({
+                    'frame_index': idx,
+                    'face_count': face_count,
+                    'faces': frame_faces
+                })
+                max_faces_in_frame = max(max_faces_in_frame, face_count)
+        except Exception as e:
+            print(f"[WARN] Face detection failed for frame {idx}: {e}")
+            continue
+    
+    return {
+        'unique_people_count': unique_face_count,
+        'max_faces_in_single_frame': max_faces_in_frame,
+        'frames_with_faces': len(all_faces),
+        'frames_analyzed': len(frames),
+        'face_detection_by_frame': all_faces
     }
 
-    return analysis
+
+# ===========================
+# OCR Extraction (Images Only - NOT for videos)
+# ===========================
+
+def preprocess_image_for_ocr(image: Image.Image) -> Image.Image:
+    """Enhance image for better OCR results"""
+    # Convert to grayscale
+    img_array = np.array(image.convert('L'))
+    
+    # Apply adaptive thresholding for better text detection
+    img_array = cv2.adaptiveThreshold(
+        img_array, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY, 11, 2
+    )
+    
+    # Denoise
+    img_array = cv2.fastNlMeansDenoising(img_array, None, 10, 7, 21)
+    
+    return Image.fromarray(img_array)
 
 
-def save_analysis(ad_id: str, analysis: Dict[str, Any]) -> Path:
-    """Save analysis JSON to analysis/<ad_id>_analysis.json."""
-    out_path = ANALYSIS_DIR / f"{ad_id}_analysis.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(analysis, f, indent=2, ensure_ascii=False)
-    print(f"[OK] Saved analysis for ad {ad_id} to {out_path}")
-    return out_path
+def extract_text_from_image(image: Image.Image, preprocess: bool = True) -> Dict[str, Any]:
+    """Extract text from a single image using OCR - ONLY FOR IMAGE FILES"""
+    try:
+        if preprocess:
+            processed_img = preprocess_image_for_ocr(image)
+        else:
+            processed_img = image
+        
+        # Extract text with detailed data
+        ocr_data = pytesseract.image_to_data(
+            processed_img, 
+            output_type=pytesseract.Output.DICT,
+            config='--psm 6'  # Assume uniform block of text
+        )
+        
+        # Extract simple text
+        text = pytesseract.image_to_string(processed_img, config='--psm 6')
+        
+        # Filter out low-confidence detections and organize by lines
+        words = []
+        for i in range(len(ocr_data['text'])):
+            if int(ocr_data['conf'][i]) > 30:  # Confidence threshold
+                word_text = ocr_data['text'][i].strip()
+                if word_text:
+                    words.append({
+                        'text': word_text,
+                        'confidence': int(ocr_data['conf'][i]),
+                        'bbox': {
+                            'x': ocr_data['left'][i],
+                            'y': ocr_data['top'][i],
+                            'width': ocr_data['width'][i],
+                            'height': ocr_data['height'][i]
+                        }
+                    })
+        
+        return {
+            'full_text': text.strip(),
+            'words': words,
+            'word_count': len(words)
+        }
+    except Exception as e:
+        print(f"[WARN] OCR extraction failed: {e}")
+        return {
+            'full_text': '',
+            'words': [],
+            'word_count': 0,
+            'error': str(e)
+        }
+
+
+# ===========================
+# TOON helpers
+# ===========================
+
+def sanitize_for_toon(obj: Any) -> Any:
+    if obj is None or isinstance(obj, (str, bool, int, float)):
+        return obj
+    if isinstance(obj, numbers.Number):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): sanitize_for_toon(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [sanitize_for_toon(v) for v in obj]
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return str(obj)
+
+
+def save_analysis_to_toon(file_id: str, analysis: Dict[str, Any]) -> Path:
+    out = ANALYSIS_DIR / f"{file_id}_analysis.toon"
+    data = sanitize_for_toon(analysis)
+    toon_str = encode(data)
+    out.write_text(toon_str, encoding="utf-8")
+    print(f"[OK] Saved TOON → {out.name}")
+    return out
+
+
+# ===========================
+# Analysis Functions
+# ===========================
+
+def analyze_video(video_path: Path, whisper_model) -> Dict[str, Any]:
+    """
+    Analyze a video file
+    - NO OCR (OCR is disabled for video files)
+    - Includes: audio transcription, scene detection, color palette, face detection
+    """
+    video_id = video_path.stem
+    
+    print(f"\n[INFO] Analyzing VIDEO: {video_path.name}")
+    print(f"[INFO] File type: {video_path.suffix} - OCR will be SKIPPED")
+    
+    # Get video metadata
+    video_metadata = get_video_metadata(video_path)
+    
+    # Extract audio and transcribe
+    print(f"[INFO] Extracting audio...")
+    try:
+        audio_path = extract_audio(video_path)
+        print(f"[INFO] Transcribing audio...")
+        transcript = transcribe_audio_whisper(audio_path, whisper_model)
+    except Exception as e:
+        print(f"[WARN] Audio extraction/transcription failed: {e}")
+        audio_path = None
+        transcript = {"text": "", "segments": []}
+    
+    # Detect scenes
+    print(f"[INFO] Detecting scenes...")
+    scenes = detect_scenes(video_path)
+    
+    # Sample frames
+    print(f"[INFO] Sampling frames...")
+    frames = sample_frames(video_path)
+    
+    # Extract color palette
+    print(f"[INFO] Extracting color palette...")
+    palette = extract_palette_from_frames(frames)
+    
+    # Detect faces (NO OCR for videos)
+    print(f"[INFO] Detecting unique faces in {len(frames)} frames...")
+    face_data = detect_faces_in_frames(frames)
+    print(f"[INFO] ✓ Found {face_data['unique_people_count']} unique person(s)")
+
+    return {
+        "content_type": "video",
+        "video_id": video_id,
+        "filename": video_path.name,
+        "file_path": str(video_path),
+        "audio_path": str(audio_path) if audio_path else None,
+        "video_metadata": video_metadata,
+        "transcript": {
+            "text": transcript.get("text", ""),
+            "segments": [
+                {
+                    "start": s.get("start"),
+                    "end": s.get("end"),
+                    "text": s.get("text", "").strip()
+                }
+                for s in transcript.get("segments", [])
+            ],
+        },
+        "scenes": scenes,
+        "scene_count": len(scenes),
+        "color_palette": palette,
+        "face_detection": face_data,
+        "ocr_performed": False,  # Explicitly mark that OCR was NOT performed
+        "ocr_skipped_reason": "OCR is disabled for video files",
+        "analysis_timestamp": datetime.now().isoformat()
+    }
+
+
+def analyze_image(image_path: Path) -> Dict[str, Any]:
+    """
+    Analyze an image file
+    - Includes: OCR text extraction, color palette, face detection
+    - OCR is ONLY performed for image files
+    """
+    image_id = image_path.stem
+    
+    print(f"\n[INFO] Analyzing IMAGE: {image_path.name}")
+    print(f"[INFO] File type: {image_path.suffix} - OCR will be PERFORMED")
+    
+    try:
+        image = Image.open(image_path)
+        
+        # Extract text using OCR (ONLY for images)
+        print(f"[INFO] Running OCR on image...")
+        ocr_result = extract_text_from_image(image)
+        print(f"[INFO] ✓ Extracted {ocr_result['word_count']} words")
+        
+        # Extract color palette
+        print(f"[INFO] Extracting color palette...")
+        palette = extract_palette_from_frames([image], k=4)
+        
+        # Detect faces
+        print(f"[INFO] Detecting faces...")
+        face_data = detect_faces_in_image(image)
+        print(f"[INFO] ✓ Found {face_data['face_count']} face(s)")
+        
+        file_stats = image_path.stat()
+        
+        return {
+            'content_type': 'image',
+            'image_id': image_id,
+            'filename': image_path.name,
+            'file_path': str(image_path),
+            'ocr_data': ocr_result,
+            'ocr_performed': True,  # Explicitly mark that OCR WAS performed
+            'color_palette': palette,
+            'face_detection': face_data,
+            'image_size': {
+                'width': image.width,
+                'height': image.height
+            },
+            'file_size_mb': file_stats.st_size / (1024 * 1024),
+            'modified_time': datetime.fromtimestamp(file_stats.st_mtime).isoformat(),
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"[ERROR] Failed to analyze image {image_path.name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'content_type': 'image',
+            'image_id': image_id,
+            'filename': image_path.name,
+            'file_path': str(image_path),
+            'error': str(e),
+            'analysis_timestamp': datetime.now().isoformat()
+        }
 
 
 # ===========================
@@ -403,26 +583,91 @@ def save_analysis(ad_id: str, analysis: Dict[str, Any]) -> Path:
 # ===========================
 
 def main():
-    # Load ads
-    ads = load_ads(ADS_JSON_PATH)
-
-    # Load Whisper once (important for speed)
-    print(f"[INFO] Loading Whisper model: {WHISPER_MODEL_NAME}")
-    whisper_model = whisper.load_model(WHISPER_MODEL_NAME)
-
-    # ================================
-    # Process ONLY FIRST 3 ADS
-    # ================================
-    print("[INFO] Running in TEST MODE – processing only the first 3 ads.\n")
-    ads_to_process = ads[:3]
-
-    for ad in ads_to_process:
-        try:
-            analysis = analyse_single_ad(ad, whisper_model)
-            save_analysis(ad["ad_id"], analysis)
-        except Exception as e:
-            print(f"[ERROR] Failed to process ad {ad.get('ad_id')}: {e}")
-
+    print("=" * 60)
+    print("AD VIDEO & IMAGE ANALYSIS PIPELINE")
+    print("=" * 60)
+    print("NOTE: OCR is ONLY performed on IMAGE files (.jpg, .png, etc.)")
+    print("      OCR is SKIPPED for VIDEO files (.mp4, .webm, etc.)")
+    print("=" * 60)
+    
+    # Find all videos and images in raw_videos directory
+    all_files = [f for f in RAW_VIDEO_DIR.iterdir() if f.is_file()]
+    videos = [f for f in all_files if is_video_file(f)]
+    images = [f for f in all_files if is_image_file(f)]
+    
+    print(f"\n[INFO] Scanning {RAW_VIDEO_DIR}")
+    print(f"[INFO] Found {len(videos)} videos: {[v.name for v in videos]}")
+    print(f"[INFO] Found {len(images)} images: {[i.name for i in images]}")
+    
+    if not videos and not images:
+        print(f"\n[WARN] No videos or images found in {RAW_VIDEO_DIR}")
+        print(f"[WARN] Supported video formats: {', '.join(SUPPORTED_VIDEO_EXTS)}")
+        print(f"[WARN] Supported image formats: {', '.join(SUPPORTED_IMAGE_EXTS)}")
+        return
+    
+    # Load Whisper model only if we have videos
+    whisper_model = None
+    if videos:
+        print(f"\n[INFO] Loading Whisper model: {WHISPER_MODEL_NAME}")
+        whisper_model = whisper.load_model(WHISPER_MODEL_NAME)
+    
+    # Process videos
+    if videos:
+        print(f"\n{'=' * 60}")
+        print(f"PROCESSING {len(videos)} VIDEO(S) - NO OCR")
+        print(f"{'=' * 60}")
+        
+        for idx, video_path in enumerate(videos, 1):
+            print(f"\n[VIDEO {idx}/{len(videos)}] {video_path.name}")
+            
+            try:
+                analysis = analyze_video(video_path, whisper_model)
+                save_analysis_to_toon(f"video_{video_path.stem}", analysis)
+                
+                # Print summary
+                print(f"[SUCCESS] Completed analysis for {video_path.name}")
+                print(f"  ✓ Unique People: {analysis['face_detection']['unique_people_count']}")
+                print(f"  ✓ Scenes: {analysis['scene_count']}")
+                print(f"  ✓ OCR: Skipped (video file)")
+                
+            except Exception as e:
+                print(f"[ERROR] Failed to analyze {video_path.name}: {e}")
+                import traceback
+                traceback.print_exc()
+    
+    # Process images
+    if images:
+        print(f"\n{'=' * 60}")
+        print(f"PROCESSING {len(images)} IMAGE(S) - WITH OCR")
+        print(f"{'=' * 60}")
+        
+        for idx, img_path in enumerate(images, 1):
+            print(f"\n[IMAGE {idx}/{len(images)}] {img_path.name}")
+            
+            try:
+                analysis = analyze_image(img_path)
+                save_analysis_to_toon(f"image_{img_path.stem}", analysis)
+                
+                # Print summary
+                if 'error' not in analysis:
+                    print(f"[SUCCESS] Completed analysis for {img_path.name}")
+                    print(f"  ✓ Faces: {analysis['face_detection']['face_count']}")
+                    print(f"  ✓ Words: {analysis['ocr_data']['word_count']}")
+                    print(f"  ✓ OCR: Performed (image file)")
+                else:
+                    print(f"[ERROR] Analysis failed with error")
+                    
+            except Exception as e:
+                print(f"[ERROR] Failed to analyze {img_path.name}: {e}")
+                import traceback
+                traceback.print_exc()
+    
+    print(f"\n{'=' * 60}")
+    print("ANALYSIS COMPLETE")
+    print(f"{'=' * 60}")
+    print(f"Videos processed: {len(videos)} (OCR skipped)")
+    print(f"Images processed: {len(images)} (OCR performed)")
+    print(f"Results saved to: {ANALYSIS_DIR}")
 
 
 if __name__ == "__main__":
