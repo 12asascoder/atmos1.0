@@ -9,7 +9,7 @@ from flask_cors import CORS
 from groq import Groq
 from supabase import create_client, Client
 from dotenv import load_dotenv
-
+from unified_db import decode_jwt_token, handle_campaign_save, get_active_campaign
 # Load environment variables
 load_dotenv()
 
@@ -478,6 +478,7 @@ def analyze_copy():
             'error': f'Failed to analyze copy: {str(e)}'
         }), 500
 
+# In copy_messaging.py, update the save_campaign function:
 @app.route('/api/save-campaign', methods=['POST'])
 def save_campaign():
     """Save campaign data to Supabase"""
@@ -486,7 +487,7 @@ def save_campaign():
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
         
-        token = data.get('user_id')  # JWT token
+        token = data.get('user_id')
         campaign_id = data.get('campaign_id')
         messaging_tone = data.get('messaging_tone')
         post_caption = data.get('post_caption')
@@ -494,24 +495,37 @@ def save_campaign():
         if not all([token, campaign_id, messaging_tone, post_caption]):
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
         
-        # Decode user_id for logging
-        user_id = decode_user_id_from_token(token)
-        logger.info(f"Save campaign request: user={user_id or 'unknown'}, campaign={campaign_id}")
+        # Decode user_id using the unified function
+        try:
+            current_user = decode_jwt_token(token)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 401
         
-        # Save to Supabase
-        success = save_to_supabase(token, campaign_id, messaging_tone, post_caption)
+        logger.info(f"Save campaign request: user={current_user or 'unknown'}, campaign={campaign_id}")
         
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Campaign saved successfully',
-                'campaign_id': campaign_id
-            }), 200
-        else:
+        # Prepare the caption data
+        caption_text = f"{post_caption.get('headline', '')}\n\n{post_caption.get('body', '')}\n\n{post_caption.get('cta', '')}"
+        
+        # Prepare data for unified handler
+        copy_data = {
+            'messaging_tone': messaging_tone,
+            'post_caption': caption_text
+        }
+        
+        # Use unified handler
+        save_result = handle_campaign_save(supabase, current_user, copy_data, campaign_id)
+        
+        if not save_result['success']:
             return jsonify({
                 'success': False,
-                'error': 'Failed to save campaign to database. Please check if user exists.'
+                'error': save_result.get('error', 'Failed to save campaign to database.')
             }), 500
+        
+        return jsonify({
+            'success': True,
+            'message': 'Campaign saved successfully',
+            'campaign_id': save_result['campaign_id']
+        }), 200
             
     except Exception as e:
         logger.error(f"Error in save_campaign: {str(e)}")

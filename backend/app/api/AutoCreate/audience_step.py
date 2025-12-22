@@ -7,6 +7,8 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 import jwt
+# Add this import at the top
+from unified_db import decode_jwt_token, handle_campaign_save, get_active_campaign
 
 # Try to import supabase
 try:
@@ -125,6 +127,7 @@ def decode_jwt_token(token):
     except Exception as e:
         raise ValueError(f"Failed to decode token: {str(e)}")
 
+# In audience_backend.py, update the save_audience_targeting() function:
 @audience_bp.route('/api/audience/targeting', methods=['POST'])
 def save_audience_targeting():
     """Save audience targeting data to Supabase"""
@@ -141,7 +144,7 @@ def save_audience_targeting():
                     'error': f'Missing required field: {field}'
                 }), 400
         
-        # Decode JWT token to get actual user_id
+        # Decode JWT token
         token = data['user_id']
         try:
             current_user = decode_jwt_token(token)
@@ -159,98 +162,42 @@ def save_audience_targeting():
         if age_max < age_min:
             return jsonify({'error': 'age_range_max must be greater than or equal to age_range_min'}), 400
         
-        # Validate demographics (should be list of strings)
+        # Validate lists
         demographics = data['demographics']
         if not isinstance(demographics, list):
             return jsonify({'error': 'demographics must be a list'}), 400
         
-        # Validate selected_interests (should be list of objects)
         selected_interests = data['selected_interests']
         if not isinstance(selected_interests, list):
             return jsonify({'error': 'selected_interests must be a list'}), 400
         
-        # Validate target_locations (should be list of objects)
         target_locations = data['target_locations']
         if not isinstance(target_locations, list):
             return jsonify({'error': 'target_locations must be a list'}), 400
         
-        # Check if campaign_id is provided (for updating existing)
+        # Prepare data
+        audience_data = {
+            'demographics': demographics,
+            'age_range_min': age_min,
+            'age_range_max': age_max,
+            'selected_interests': selected_interests,
+            'target_locations': target_locations
+        }
+        
+        # Get campaign_id if provided
         campaign_id = data.get('campaign_id')
         
-        supabase = app.config['SUPABASE']
+        # Use unified handler
+        save_result = handle_campaign_save(supabase, current_user, audience_data, campaign_id)
         
-        if campaign_id:
-            # Update existing campaign
-            response = supabase.table('auto_create').update({
-                'demographics': demographics,
-                'age_range_min': age_min,
-                'age_range_max': age_max,
-                'selected_interests': selected_interests,
-                'target_locations': target_locations,
-                'updated_at': datetime.now().isoformat()
-            }).eq('id', campaign_id).eq('user_id', current_user).execute()
-            
-            if response.data:
-                return jsonify({
-                    'success': True,
-                    'message': 'Audience targeting updated successfully',
-                    'campaign_id': campaign_id
-                }), 200
-            else:
-                return jsonify({'error': 'Campaign not found or access denied'}), 404
+        if not save_result['success']:
+            return jsonify({'error': save_result.get('error', 'Failed to save audience data')}), 500
         
-        else:
-            # Create new campaign with only audience data
-            # First, check if user already has a draft campaign
-            response = supabase.table('auto_create').select('id, campaign_goal').eq('user_id', current_user).eq('campaign_status', 'draft').execute()
-            
-            if response.data:
-                # Update existing draft
-                campaign_id = response.data[0]['id']
-                update_data = {
-                    'demographics': demographics,
-                    'age_range_min': age_min,
-                    'age_range_max': age_max,
-                    'selected_interests': selected_interests,
-                    'target_locations': target_locations,
-                    'updated_at': datetime.now().isoformat()
-                }
-                
-                # If campaign_goal exists, keep it
-                if response.data[0].get('campaign_goal'):
-                    update_data['campaign_goal'] = response.data[0]['campaign_goal']
-                
-                response = supabase.table('auto_create').update(update_data).eq('id', campaign_id).eq('user_id', current_user).execute()
-            else:
-                # Create new draft
-                campaign_data = {
-                    'user_id': current_user,
-                    'demographics': demographics,
-                    'age_range_min': age_min,
-                    'age_range_max': age_max,
-                    'selected_interests': selected_interests,
-                    'target_locations': target_locations,
-                    'campaign_status': 'draft',
-                    'created_at': datetime.now().isoformat(),
-                    'updated_at': datetime.now().isoformat(),
-                    'budget_amount': 0.00,  # Required field
-                    'campaign_duration': 1    # Required field
-                }
-                
-                # Add optional fields if present
-                optional_fields = ['campaign_goal', 'budget_type', 'messaging_tone']
-                for field in optional_fields:
-                    if field in data:
-                        campaign_data[field] = data[field]
-                
-                response = supabase.table('auto_create').insert(campaign_data).execute()
-                campaign_id = response.data[0]['id'] if response.data else None
-            
-            return jsonify({
-                'success': True,
-                'message': 'Audience targeting saved successfully',
-                'campaign_id': campaign_id
-            }), 201
+        return jsonify({
+            'success': True,
+            'message': 'Audience targeting saved successfully',
+            'campaign_id': save_result['campaign_id']
+        }), 200
             
     except Exception as e:
         return jsonify({'error': str(e)}), 500

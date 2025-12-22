@@ -4,6 +4,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import jwt
+# Add this import at the top
+from unified_db import decode_jwt_token, handle_campaign_save, get_active_campaign
 
 load_dotenv()
 
@@ -40,12 +42,14 @@ else:
 
 supabase: Client = create_client(url, key)
 
+# In campaign_goal.py, update the campaign_goal() function:
+# In campaign_goal.py, update the campaign_goal function:
 @app.route('/api/campaign-goal', methods=['POST'])
 def campaign_goal():
     try:
         data = request.get_json()
         goal = data.get('goal')
-        token = data.get('user_id')  # This is actually the JWT token from localStorage
+        token = data.get('user_id')
         
         if not goal:
             return jsonify({'error': 'Goal is required'}), 400
@@ -53,107 +57,43 @@ def campaign_goal():
         if not token:
             return jsonify({'error': 'Authentication token is required'}), 400
         
-        # Ensure token is a string
-        if not isinstance(token, str):
-            print(f"Token type issue: received {type(token)}, value: {token}")
-            return jsonify({'error': 'Token must be a string'}), 400
-        
-        # Strip any whitespace
-        token = token.strip()
-        print(f"Token length: {len(token)}")
-        print(f"Token starts with: {token[:10]}...")
-        
-        # Decode the JWT token to extract the real user_id
+        # Decode JWT token
         try:
-            # Ensure SECRET_KEY is a string (defensive coding)
-            secret_to_use = str(SECRET_KEY) if SECRET_KEY else None
-            if not secret_to_use:
-                return jsonify({'error': 'Server configuration error - SECRET_KEY missing'}), 500
-            
-            print(f"SECRET_KEY type: {type(secret_to_use)}, length: {len(secret_to_use)}")
-            
-            payload = jwt.decode(token, secret_to_use, algorithms=["HS256"])
-            user_id = payload.get('user_id')
-            
-            if not user_id:
-                return jsonify({'error': 'Invalid token payload - user_id not found'}), 401
-            
-            # Ensure user_id is a string (UUID format)
-            user_id = str(user_id)
-            print(f"Successfully decoded token. User ID: {user_id}")
-                
-        except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token has expired. Please login again.'}), 401
-        except jwt.InvalidTokenError as e:
-            print(f"JWT decode error: {str(e)}")
-            print(f"Error type: {type(e)}")
-            print(f"Token received (first 30 chars): {token[:30]}...")
-            return jsonify({'error': f'Invalid token: {str(e)}'}), 401
-        except TypeError as e:
-            print(f"TypeError during JWT decode: {str(e)}")
-            print(f"SECRET_KEY type: {type(SECRET_KEY)}")
-            print(f"Token type: {type(token)}")
-            return jsonify({'error': f'Type error during token validation: {str(e)}'}), 500
-        except Exception as e:
-            print(f"Token processing error: {str(e)}")
-            print(f"Error type: {type(e).__name__}")
-            print(f"Token type: {type(token)}")
-            print(f"SECRET_KEY type: {type(SECRET_KEY)}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'error': f'Failed to process token: {str(e)}'}), 401
+            current_user = decode_jwt_token(token)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 401
         
         # Validate goal
         valid_goals = ['awareness', 'consideration', 'conversions', 'retention']
         if goal not in valid_goals:
             return jsonify({'error': f'Invalid goal. Must be one of: {", ".join(valid_goals)}'}), 400
         
-        # Check if user already has a draft campaign
-        existing_campaign = (
-            supabase.table("auto_create")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("campaign_status", "draft")
-            .execute()
-        )
+        # Get campaign_id if provided
+        campaign_id = data.get('campaign_id')
         
-        if existing_campaign.data:
-            # Update existing draft campaign
-            campaign_id = existing_campaign.data[0]['id']
-            response = (
-                supabase.table("auto_create")
-                .update({"campaign_goal": goal})
-                .eq("id", campaign_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Goal updated successfully',
-                'data': response.data[0],
-                'campaign_id': response.data[0]['id']
-            }), 200
-        else:
-            # Insert new campaign goal
-            response = (
-                supabase.table("auto_create")
-                .insert({
-                    "user_id": user_id,  # Use the decoded UUID from token
-                    "campaign_goal": goal,
-                    "campaign_status": "draft",
-                    "budget_amount": 0.00,  # Numeric value
-                    "campaign_duration": 1  # Integer value
-                })
-                .execute()
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Goal saved successfully',
-                'data': response.data[0],
-                'campaign_id': response.data[0]['id']
-            }), 201
+        # Use unified handler
+        save_result = handle_campaign_save(supabase, current_user, {'campaign_goal': goal}, campaign_id)
+        
+        if not save_result['success']:
+            return jsonify({'error': save_result.get('error', 'Failed to save goal')}), 500
+        
+        # Get the saved campaign data
+        campaign_result = get_active_campaign(supabase, current_user, save_result['campaign_id'])
+        
+        if not campaign_result['success'] or not campaign_result['campaign']:
+            return jsonify({'error': 'Failed to retrieve saved campaign'}), 500
+        
+        campaign = campaign_result['campaign']
+        
+        return jsonify({
+            'success': True,
+            'message': 'Goal saved successfully',
+            'data': {
+                'campaign_goal': campaign['campaign_goal'],
+                'campaign_status': campaign['campaign_status']
+            },
+            'campaign_id': save_result['campaign_id']
+        }), 200
         
     except Exception as e:
         print(f"Error saving goal: {str(e)}")
