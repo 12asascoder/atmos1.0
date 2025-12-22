@@ -1,12 +1,68 @@
-import React, { useState } from 'react';
-import { Users, TrendingUp, MapPin, Briefcase, Heart, Search } from 'lucide-react';
+// AudienceStep.jsx
+import React, { useState, useEffect } from 'react';
+import { Users, TrendingUp, MapPin, Briefcase, Heart, Search, Save, Loader, AlertCircle, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const AudienceStep: React.FC = () => {
-  const [selectedDemographics, setSelectedDemographics] = useState<string[]>([]);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+const AudienceStep = ({ campaignId, onSave, initialData }) => {
+  const [selectedDemographics, setSelectedDemographics] = useState([]);
+  const [selectedInterests, setSelectedInterests] = useState([]);
   const [ageRange, setAgeRange] = useState([25, 45]);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>(['United States']);
+  const [targetLocations, setTargetLocations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [insights, setInsights] = useState(null);
+  const [presetInterests, setPresetInterests] = useState([]);
+  const [presetLocations, setPresetLocations] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  // Get token from localStorage
+  const [token, setToken] = useState(null);
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+    } else {
+      setError('Not authenticated. Please login first.');
+    }
+  }, []);
+
+  // Load initial data if provided
+  useEffect(() => {
+    if (initialData) {
+      setSelectedDemographics(initialData.demographics || []);
+      setSelectedInterests(initialData.selected_interests || []);
+      setAgeRange([
+        initialData.age_range_min || 25,
+        initialData.age_range_max || 45
+      ]);
+      setTargetLocations(initialData.target_locations || []);
+    }
+  }, [initialData]);
+
+  // Load preset data
+  useEffect(() => {
+    loadPresetData();
+  }, []);
+
+  const loadPresetData = async () => {
+    try {
+      const [interestsRes, locationsRes] = await Promise.all([
+        fetch('http://localhost:5006/api/audience/preset-interests'),
+        fetch('http://localhost:5006/api/audience/preset-locations')
+      ]);
+
+      const interestsData = await interestsRes.json();
+      const locationsData = await locationsRes.json();
+
+      setPresetInterests(interestsData.interests);
+      setPresetLocations(locationsData.locations);
+    } catch (error) {
+      console.error('Error loading preset data:', error);
+    }
+  };
 
   const demographics = [
     { id: 'male', label: 'Male', percentage: '45%' },
@@ -14,39 +70,194 @@ const AudienceStep: React.FC = () => {
     { id: 'all', label: 'All Genders', percentage: '100%' }
   ];
 
-  const interests = [
-    { id: 'fitness', label: 'Fitness & Wellness', icon: Heart, color: 'from-rose-400 to-pink-600' },
-    { id: 'sports', label: 'Sports Enthusiasts', icon: TrendingUp, color: 'from-blue-400 to-indigo-600' },
-    { id: 'fashion', label: 'Fashion & Lifestyle', icon: Briefcase, color: 'from-purple-400 to-violet-600' },
-    { id: 'running', label: 'Running Community', icon: Users, color: 'from-emerald-400 to-teal-600' }
-  ];
-
-  const topLocations = [
-    { name: 'United States', users: '45M', growth: '+12%' },
-    { name: 'United Kingdom', users: '8M', growth: '+8%' },
-    { name: 'Canada', users: '6M', growth: '+15%' },
-    { name: 'Australia', users: '4M', growth: '+10%' }
-  ];
-
-  const toggleDemographic = (id: string) => {
-    setSelectedDemographics(prev =>
-      prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]
-    );
+  const toggleDemographic = (id) => {
+    let newDemographics;
+    if (id === 'all') {
+      newDemographics = ['all'];
+    } else {
+      newDemographics = selectedDemographics.includes(id)
+        ? selectedDemographics.filter(d => d !== id && d !== 'all')
+        : [...selectedDemographics.filter(d => d !== 'all'), id];
+    }
+    setSelectedDemographics(newDemographics);
   };
 
-  const toggleInterest = (id: string) => {
-    setSelectedInterests(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const toggleInterest = (interest) => {
+    setSelectedInterests(prev => {
+      const exists = prev.find(item => item.id === interest.id);
+      if (exists) {
+        return prev.filter(item => item.id !== interest.id);
+      } else {
+        return [...prev, interest];
+      }
+    });
   };
+
+  const toggleLocation = (location) => {
+    setTargetLocations(prev => {
+      const exists = prev.find(item => item.name === location.name);
+      if (exists) {
+        return prev.filter(item => item.name !== location.name);
+      } else {
+        return [...prev, location];
+      }
+    });
+  };
+
+  const getAudienceInsights = async () => {
+    if (!token) {
+      setError('Not authenticated. Please login first.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:5006/api/audience/insights', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          demographics: selectedDemographics,
+          age_range_min: ageRange[0],
+          age_range_max: ageRange[1],
+          selected_interests: selectedInterests,
+          target_locations: targetLocations
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setInsights(data.insights);
+      } else {
+        setError(data.error || 'Failed to get insights');
+      }
+    } catch (error) {
+      console.error('Error getting insights:', error);
+      setError('Failed to connect to server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveAudienceData = async () => {
+    if (!token) {
+      setError('Not authenticated. Please login first.');
+      return;
+    }
+
+    if (!selectedDemographics.length) {
+      setError('Please select at least one demographic');
+      return;
+    }
+
+    if (!selectedInterests.length) {
+      setError('Please select at least one interest');
+      return;
+    }
+
+    if (!targetLocations.length) {
+      setError('Please select at least one location');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSuccess(false);
+    
+    try {
+      const payload = {
+        demographics: selectedDemographics,
+        age_range_min: ageRange[0],
+        age_range_max: ageRange[1],
+        selected_interests: selectedInterests,
+        target_locations: targetLocations,
+        user_id: token
+      };
+
+      // Add campaign_id if we have one
+      if (campaignId) {
+        payload.campaign_id = campaignId;
+      }
+
+      const response = await fetch('http://localhost:5006/api/audience/targeting', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccess(true);
+        if (onSave) {
+          onSave(data.campaign_id);
+        }
+        // Get fresh insights after saving
+        getAudienceInsights();
+      } else {
+        setError(data.error || 'Failed to save audience data');
+      }
+    } catch (error) {
+      console.error('Error saving audience data:', error);
+      setError('Failed to connect to server');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filteredLocations = presetLocations.filter(location =>
+    location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    location.regions.some(region => region.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const selectedLocationNames = targetLocations.map(loc => loc.name).join(', ');
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-slate-800 mb-2">Audience Targeting</h2>
-        <p className="text-slate-600">Define your target audience and demographics for optimal campaign performance</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800 mb-2">Audience Targeting</h2>
+          <p className="text-slate-600">Define your target audience and demographics for optimal campaign performance</p>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={saveAudienceData}
+          disabled={saving || !token}
+          className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-600 text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? (
+            <Loader className="w-5 h-5 animate-spin" />
+          ) : (
+            <Save className="w-5 h-5" />
+          )}
+          {saving ? 'Saving...' : 'Save Audience'}
+        </motion.button>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-red-800 font-medium">Error</p>
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
+          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          <p className="text-emerald-800 font-medium">Audience targeting saved successfully!</p>
+        </div>
+      )}
 
       {/* Demographics Section */}
       <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
@@ -110,14 +321,14 @@ const AudienceStep: React.FC = () => {
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {interests.map((interest) => {
-            const Icon = interest.icon;
-            const isSelected = selectedInterests.includes(interest.id);
+          {presetInterests.map((interest) => {
+            const Icon = Briefcase;
+            const isSelected = selectedInterests.some(item => item.id === interest.id);
             
             return (
               <motion.button
                 key={interest.id}
-                onClick={() => toggleInterest(interest.id)}
+                onClick={() => toggleInterest(interest)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`p-6 rounded-xl border-2 transition-all text-left ${
@@ -127,12 +338,16 @@ const AudienceStep: React.FC = () => {
                 }`}
               >
                 <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${interest.color} flex items-center justify-center flex-shrink-0`}>
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0`}>
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-slate-800 mb-1">{interest.label}</h4>
-                    <p className="text-sm text-slate-500">High engagement audience</p>
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-semibold text-slate-800 mb-1">{interest.label}</h4>
+                      <span className="text-sm font-medium text-emerald-600">{interest.growth_rate}</span>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-2">{interest.description}</p>
+                    <p className="text-xs text-slate-400">Audience: {interest.audience_size}</p>
                   </div>
                   {isSelected && (
                     <div className="w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center flex-shrink-0">
@@ -161,65 +376,109 @@ const AudienceStep: React.FC = () => {
             <input
               type="text"
               placeholder="Search countries, cities, or regions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
             />
           </div>
         </div>
 
-        <div className="space-y-3">
-          {topLocations.map((location) => (
-            <div
-              key={location.name}
-              className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200 hover:border-cyan-300 transition-colors"
+        {targetLocations.length > 0 && (
+          <div className="mb-6 p-4 bg-cyan-50 rounded-xl border border-cyan-200">
+            <h4 className="text-sm font-medium text-slate-700 mb-2">Selected Locations:</h4>
+            <p className="text-cyan-700 font-medium">{selectedLocationNames}</p>
+          </div>
+        )}
+
+        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+          {filteredLocations.map((location) => (
+            <motion.button
+              key={location.code}
+              onClick={() => toggleLocation(location)}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
+              className={`w-full p-4 rounded-xl border transition-colors text-left ${
+                targetLocations.some(loc => loc.name === location.name)
+                  ? 'border-cyan-500 bg-cyan-50'
+                  : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+              }`}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
-                  <MapPin className="w-5 h-5 text-white" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
+                    <MapPin className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800">{location.name}</h4>
+                    <p className="text-sm text-slate-500">{location.users} potential reach</p>
+                    <p className="text-xs text-slate-400">
+                      {location.regions.slice(0, 2).join(', ')}...
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold text-slate-800">{location.name}</h4>
-                  <p className="text-sm text-slate-500">{location.users} potential reach</p>
+                <div className="text-right">
+                  <span className="text-emerald-600 text-sm font-medium">{location.growth}</span>
+                  <p className="text-xs text-slate-500">growth</p>
                 </div>
               </div>
-              <div className="text-right">
-                <span className="text-emerald-600 text-sm font-medium">{location.growth}</span>
-                <p className="text-xs text-slate-500">growth</p>
-              </div>
-            </div>
+            </motion.button>
           ))}
         </div>
       </div>
 
+      {/* Insights Button */}
+      <div className="flex justify-center">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={getAudienceInsights}
+          disabled={loading || !selectedDemographics.length || !token}
+          className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <Loader className="w-5 h-5 animate-spin" />
+          ) : (
+            <TrendingUp className="w-5 h-5" />
+          )}
+          {loading ? 'Analyzing...' : 'Get AI Audience Insights'}
+        </motion.button>
+      </div>
+
       {/* AI Insights */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 rounded-2xl p-6"
-      >
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0">
-            <TrendingUp className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h4 className="text-lg font-semibold text-slate-800 mb-2">AI Audience Insights</h4>
-            <p className="text-slate-700 mb-3">
-              Based on your selections, we've identified an audience of <strong className="text-cyan-700">23.4M users</strong> with high purchase intent. 
-              This audience has shown <strong className="text-cyan-700">2.3x higher engagement</strong> with similar campaigns.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
-                Avg. Age: 32
-              </span>
-              <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
-                Peak Activity: 6-9 PM
-              </span>
-              <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
-                Device: 78% Mobile
-              </span>
+      {insights && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 rounded-2xl p-6"
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-lg font-semibold text-slate-800 mb-2">AI Audience Insights</h4>
+              <p className="text-slate-700 mb-3">
+                Based on your selections, we've identified an audience of{' '}
+                <strong className="text-cyan-700">{insights.estimated_audience} users</strong>{' '}
+                with high purchase intent. This audience has shown{' '}
+                <strong className="text-cyan-700">{insights.engagement_multiplier}x higher engagement</strong>{' '}
+                with similar campaigns.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
+                  Avg. Age: {insights.average_age}
+                </span>
+                <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
+                  Peak Activity: {insights.peak_activity}
+                </span>
+                <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
+                  Device: {insights.device_preference}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 };
