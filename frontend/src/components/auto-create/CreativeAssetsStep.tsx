@@ -1,3 +1,4 @@
+// CreativeAssetsStep.tsx
 import React, { useState, useRef } from 'react';
 import { Sparkles, Download, Heart, Upload, X, Camera, Image as ImageIcon, Loader } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -25,9 +26,13 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [currentPrompt, setCurrentPrompt] = useState('');
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Dummy images for demo
+  // Backend API URL
+  const API_BASE_URL = 'http://localhost:5009'; // Change to your backend URL
+
+  // Dummy images for demo (fallback)
   const dummyImages = [
     'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&h=1000&fit=crop',
     'https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=800&h=1000&fit=crop',
@@ -41,8 +46,8 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
   const getPromptForGoal = (goal: string | null): string => {
     const prompts: Record<string, string> = {
       'awareness': 'Professional product advertisement, brand awareness, eye-catching, high quality, commercial photography, studio lighting',
-      'engagement': 'Engaging product showcase, interactive concept, lifestyle setting, natural environment, social media optimized',
-      'conversion': 'Product in use, compelling call-to-action, clear value proposition, commercial advertisement, conversion-focused',
+      'consideration': 'Engaging product showcase, interactive concept, lifestyle setting, natural environment, social media optimized',
+      'conversions': 'Product in use, compelling call-to-action, clear value proposition, commercial advertisement, conversion-focused',
       'retention': 'Loyalty building, customer success story, product benefits showcase, long-term value, retention-focused',
       'lead': 'Lead generation focused, information gathering, valuable offer presentation, B2B oriented, professional',
     };
@@ -55,20 +60,71 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     { label: 'Color Scheme', value: 'High Contrast', stat: '+28% CTR', color: 'from-emerald-500 to-teal-600' }
   ];
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setUploadedFile(file);
       
       // Create preview
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const result = e.target?.result as string;
         setUploadedImage(result);
+        
+        // Upload to backend
+        await uploadImageToBackend(file, result);
       };
       reader.readAsDataURL(file);
     }
   };
+
+  const storeUploadResponse = (response: any) => {
+  localStorage.setItem('last_upload_response', JSON.stringify(response));
+  if (response.campaign_id) {
+    localStorage.setItem('campaign_id', response.campaign_id);
+  }
+};
+
+  const uploadImageToBackend = async (file: File, imageDataUrl: string) => {
+  try {
+    setUploading(true);
+    const base64Data = imageDataUrl.split(',')[1];
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
+    const response = await fetch(`${API_BASE_URL}/api/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: token,
+        image_data: base64Data,
+        filename: file.name,
+        campaign_id: localStorage.getItem('campaign_id'),
+        asset_data: {
+          title: file.name,
+          type: 'user_uploaded',
+          score: 0
+        }
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      console.log('Image uploaded successfully:', data.image_url);
+      // Store the response including campaign_id
+      storeUploadResponse(data);
+    } else {
+      console.error('Upload failed:', data.error);
+    }
+  } catch (error) {
+    console.error('Error uploading image:', error);
+  } finally {
+    setUploading(false);
+  }
+};
 
   const handleGenerateAssets = async () => {
     if (!uploadedImage || !uploadedFile) return;
@@ -76,25 +132,75 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     setIsGenerating(true);
     setGenerationProgress(0);
     
-    // Simulate API call with progress
-    const interval = setInterval(() => {
+    // Simulate progress while calling API
+    const progressInterval = setInterval(() => {
       setGenerationProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          generateDummyData();
-          setIsGenerating(false);
-          return 100;
+        if (prev >= 90) { // Stop at 90%, let API call complete to 100%
+          clearInterval(progressInterval);
+          return 90;
         }
-        return prev + 10;
+        return prev + 5;
       });
-    }, 200);
+    }, 100);
+    
+    try {
+      // Get token
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const campaignId = localStorage.getItem('campaign_id');
+      
+      const response = await fetch(`${API_BASE_URL}/api/generate-assets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: token,
+          image_url: uploadedImage,
+          campaign_goal: selectedGoal,
+          campaign_id: campaignId
+        })
+      });
+      
+      const data = await response.json();
+      
+      clearInterval(progressInterval);
+      setGenerationProgress(100);
+      
+      if (data.success) {
+        // Update with real generated assets from backend
+        const backendAssets = data.assets.map((asset: any, index: number) => ({
+          ...asset,
+          image: asset.image_url, // Map image_url to image for compatibility
+          id: index + 1
+        }));
+        
+        setGeneratedAssets(backendAssets);
+        setHasGenerated(true);
+        setCurrentPrompt(backendAssets[0]?.prompt || '');
+        
+        // Store campaign_id if returned
+        if (data.campaign_id) {
+          localStorage.setItem('campaign_id', data.campaign_id);
+        }
+      } else {
+        console.error('Generation failed:', data.error);
+        // Fallback to dummy data
+        generateDummyData();
+      }
+    } catch (error) {
+      console.error('Error generating assets:', error);
+      // Fallback to dummy data
+      generateDummyData();
+    } finally {
+      setTimeout(() => setIsGenerating(false), 500);
+    }
   };
 
   const generateDummyData = () => {
     const prompt = getPromptForGoal(selectedGoal);
     setCurrentPrompt(prompt);
     
-    // Create dummy generated assets
+    // Create dummy generated assets (fallback)
     const dummyGeneratedAssets: GeneratedImage[] = [
       {
         id: 1,
@@ -150,12 +256,112 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     setHasGenerated(true);
   };
 
+  // Update the saveSelectedAssets function to be more robust
+const saveSelectedAssets = async () => {
+  try {
+    const selectedAssetsData = generatedAssets
+      .filter(asset => selectedAssets.includes(asset.id))
+      .map(asset => ({
+        id: asset.id,
+        title: asset.title,
+        image_url: asset.image,
+        prompt: asset.prompt,
+        score: asset.score,
+        type: asset.type
+      }));
+    
+    if (selectedAssetsData.length === 0) {
+      alert('Please select at least one asset');
+      return;
+    }
+    
+    // Try to get token from multiple possible locations
+    const token = localStorage.getItem('token') || 
+                  sessionStorage.getItem('token') || 
+                  localStorage.getItem('auth_token') ||
+                  sessionStorage.getItem('auth_token');
+    
+    if (!token) {
+      alert('Please login first');
+      return;
+    }
+    
+    // Try to get campaign_id from multiple sources
+    let campaignId = localStorage.getItem('campaign_id');
+    
+    // If no campaign_id found, try to get it from the URL or create a new one
+    if (!campaignId) {
+      // Check if we have a campaign_id from a previous upload
+      const lastUploadResponse = localStorage.getItem('last_upload_response');
+      if (lastUploadResponse) {
+        const parsed = JSON.parse(lastUploadResponse);
+        if (parsed.campaign_id) {
+          campaignId = parsed.campaign_id;
+        }
+      }
+      
+      // If still no campaign_id, create a new campaign first
+      if (!campaignId) {
+        alert('No campaign found. Creating a new campaign...');
+        
+        // Create a new campaign by uploading a dummy image or calling a create campaign endpoint
+        const createCampaignResponse = await fetch(`${API_BASE_URL}/api/create-campaign`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: token,
+            campaign_goal: selectedGoal || 'awareness'
+          })
+        });
+        
+        const createData = await createCampaignResponse.json();
+        
+        if (createData.success && createData.campaign_id) {
+          campaignId = createData.campaign_id;
+          localStorage.setItem('campaign_id', campaignId);
+        } else {
+          alert('Failed to create campaign. Please try uploading an image first.');
+          return;
+        }
+      }
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/save-selected-assets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: token,
+        selected_assets: selectedAssetsData,
+        campaign_id: campaignId
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      alert(`${selectedAssetsData.length} assets saved successfully!`);
+      // You can navigate to next step or update UI here
+    } else {
+      console.error('Save failed:', data.error);
+      alert(`Failed to save assets: ${data.error}`);
+    }
+  } catch (error) {
+    console.error('Error saving selected assets:', error);
+    alert('Error saving selected assets. Please try again.');
+  }
+};
+
   const handleRemoveImage = () => {
     setUploadedImage(null);
     setUploadedFile(null);
     setHasGenerated(false);
     setGeneratedAssets([]);
     setGenerationProgress(0);
+    setSelectedAssets([]);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -174,6 +380,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
       reader.onload = (e) => {
         const result = e.target?.result as string;
         setUploadedImage(result);
+        uploadImageToBackend(file, result);
       };
       reader.readAsDataURL(file);
     }
@@ -227,8 +434,11 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                 </div>
               </div>
               
-              <button className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold hover:from-cyan-600 hover:to-teal-700 transition-all shadow-md">
-                Choose Image
+              <button 
+                className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold hover:from-cyan-600 hover:to-teal-700 transition-all shadow-md"
+                disabled={uploading}
+              >
+                {uploading ? 'Uploading...' : 'Choose Image'}
               </button>
               
               <p className="mt-4 text-slate-500 text-sm">
@@ -241,6 +451,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                 accept="image/*"
                 onChange={handleFileUpload}
                 className="hidden"
+                disabled={uploading}
               />
             </div>
           ) : (
@@ -259,6 +470,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                   <button
                     onClick={handleRemoveImage}
                     className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors shadow-md"
+                    disabled={isGenerating}
                   >
                     <X className="w-5 h-5 text-slate-700" />
                   </button>
@@ -285,7 +497,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                     <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                       <span className="text-slate-600">Image Status</span>
                       <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                        Ready for AI Processing
+                        {uploading ? 'Uploading...' : 'Ready for AI Processing'}
                       </span>
                     </div>
                     
@@ -301,10 +513,10 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                     </div>
 
                     {/* Progress Bar */}
-                    {isGenerating && (
+                    {(isGenerating || uploading) && (
                       <div className="p-4 bg-slate-50 rounded-xl">
                         <div className="flex justify-between text-sm text-slate-600 mb-2">
-                          <span>Generating AI assets...</span>
+                          <span>{isGenerating ? 'Generating AI assets...' : 'Uploading image...'}</span>
                           <span>{generationProgress}%</span>
                         </div>
                         <div className="w-full bg-slate-200 rounded-full h-2.5">
@@ -320,7 +532,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                   <div className="flex gap-4">
                     <button
                       onClick={handleGenerateAssets}
-                      disabled={isGenerating}
+                      disabled={isGenerating || uploading}
                       className="flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white font-semibold hover:from-cyan-600 hover:to-teal-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGenerating ? (
@@ -338,7 +550,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                     
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={isGenerating}
+                      disabled={isGenerating || uploading}
                       className="px-6 py-4 rounded-xl border-2 border-slate-300 text-slate-700 font-semibold hover:border-slate-400 hover:bg-slate-50 transition-all disabled:opacity-50"
                     >
                       Change Image
@@ -465,8 +677,11 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                     Ready to use in your campaign. You can download or proceed to next step.
                   </p>
                 </div>
-                <button className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-700 text-white font-semibold rounded-lg hover:from-cyan-700 hover:to-teal-800 transition-all">
-                  Proceed with Selected
+                <button 
+                  onClick={saveSelectedAssets}
+                  className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-700 text-white font-semibold rounded-lg hover:from-cyan-700 hover:to-teal-800 transition-all"
+                >
+                  Save & Proceed with Selected
                 </button>
               </div>
             </div>

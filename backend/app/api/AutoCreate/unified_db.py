@@ -34,6 +34,36 @@ def decode_jwt_token(token):
         raise ValueError(f"Invalid token: {str(e)}")
     except Exception as e:
         raise ValueError(f"Failed to decode token: {str(e)}")
+    
+def save_assets_to_campaign(supabase, user_id, assets_data, campaign_id):
+    """Save assets to a specific campaign"""
+    try:
+        # Convert assets data to JSONB format
+        assets_json = json.dumps(assets_data) if not isinstance(assets_data, str) else assets_data
+        
+        # Update the campaign with assets
+        response = supabase.table('auto_create').update({
+            'assets': assets_json,
+            'updated_at': datetime.now().isoformat()
+        }).eq('id', campaign_id).eq('user_id', user_id).execute()
+        
+        if response.data:
+            return {
+                'success': True,
+                'message': 'Assets saved successfully'
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'Campaign not found or access denied'
+            }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
 
 def handle_campaign_save(supabase, current_user, data, campaign_id=None):
     """
@@ -48,10 +78,12 @@ def handle_campaign_save(supabase, current_user, data, campaign_id=None):
                 # Try to convert to integer (since database uses serial ID)
                 campaign_id = int(campaign_id)
             except ValueError:
-                # If it's a UUID string, we can't use it directly
-                # We'll need to look it up by other means or treat as None
+                # If it's not an integer, treat as None
                 print(f"Warning: campaign_id is not an integer: {campaign_id}")
                 campaign_id = None
+        
+        # Extract assets if present
+        assets_data = data.pop('assets', None) or data.pop('selected_asset_ids', None)
         
         # If campaign_id is provided and is a valid integer, update that specific campaign
         if campaign_id and isinstance(campaign_id, int):
@@ -63,17 +95,17 @@ def handle_campaign_save(supabase, current_user, data, campaign_id=None):
                 data['updated_at'] = datetime.now().isoformat()
                 response = supabase.table('auto_create').update(data).eq('id', campaign_id).eq('user_id', current_user).execute()
                 
-                if response.data:
-                    return {
-                        'success': True,
-                        'campaign_id': campaign_id,
-                        'is_update': True
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': 'Failed to update campaign'
-                    }
+                if response.data and assets_data:
+                    # Save assets separately
+                    assets_result = save_assets_to_campaign(supabase, current_user, assets_data, campaign_id)
+                    if not assets_result['success']:
+                        return assets_result
+                
+                return {
+                    'success': True,
+                    'campaign_id': campaign_id,  # Return the campaign_id
+                    'is_update': True
+                }
             else:
                 return {
                     'success': False,
@@ -97,7 +129,7 @@ def handle_campaign_save(supabase, current_user, data, campaign_id=None):
             if response.data:
                 return {
                     'success': True,
-                    'campaign_id': active_campaign_id,
+                    'campaign_id': active_campaign_id,  # Return the campaign_id
                     'is_update': True,
                     'is_new_version': False,
                     'version': current_version
@@ -133,7 +165,7 @@ def handle_campaign_save(supabase, current_user, data, campaign_id=None):
                 new_campaign_id = response.data[0]['id']
                 return {
                     'success': True,
-                    'campaign_id': new_campaign_id,
+                    'campaign_id': new_campaign_id,  # Return the new campaign_id
                     'is_update': False,
                     'is_new_version': False,
                     'version': 1
