@@ -1,48 +1,53 @@
+# Web Frameworks
 fastapi
 uvicorn
-sqlalchemy
-psycopg2-binary
-pydantic
-pydantic-settings
-python-dotenv
-requests
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-pydantic
-pydantic-settings
-python-dotenv
-requests
-# Core
-python-dotenv
-tqdm
-requests
 flask
 flask-cors
+flask-jwt-extended
+
+# Environment & Config
+python-dotenv
+pydantic
+pydantic-settings
+
+# Database
+sqlalchemy
+psycopg2-binary
+supabase
+
+# Authentication
+PyJWT
+
+# HTTP & Utilities
+requests
+tqdm
+schedule
+
+# AI / LLM
+groq
+whisper
+whisper-openai
+
+# ML / CV
+numpy
+scikit-learn
+pillow
+opencv-python
+face-recognition
 
 # Video / Audio Processing
-opencv-python
-numpy
 moviepy
 imageio-ffmpeg
 soundfile
 
-# ML / CV
-scikit-learn
-pillow
-
 # Scene Detection
-PySceneDetect
-
-# Speech-to-Text
-openai-whisper
+scenedetect
 
 # OCR
 pytesseract
 
-# Face Recognition
-face-recognition
+# Browser Automation
+playwright
 
-# TOON encoding
+# Misc
 python-toon
