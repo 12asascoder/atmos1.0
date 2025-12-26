@@ -13,6 +13,7 @@ class Settings:
     ANALYTICS_PORT = int(os.getenv("ANALYTICS_PORT", 5007))
     DAILY_METRICS_PORT = int(os.getenv("DAILY_METRICS_PORT", 5008))
     COMPETITORS_PORT = int(os.getenv("COMPETITORS_PORT", 5009))
+    TARGETING_INTEL_PORT = int(os.getenv("TARGETING_INTEL_PORT", 5011))
     
     # JWT Configuration
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret-key-change-in-production")

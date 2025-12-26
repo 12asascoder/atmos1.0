@@ -70,6 +70,18 @@ SERVICES = [
             "POST /api/competitors",
             "DELETE /api/competitors/<id>"
         ]
+    },
+    {
+        "name": "🏢 targetingintel",
+        "script": "api/targeting_intel.py",
+        "port": settings.COMPETITORS_PORT,
+        "health_check": f"http://localhost:{settings.AUTH_PORT}/health",  
+        "description": "Manages user competitors and tracking",
+        "endpoints": [
+            "GET /api/targeting-intel",
+            "GET /api/targeting-intel/<competitor_id>",
+            "GET /api/targeting-intel/latest"
+        ]
     }
 ]
 

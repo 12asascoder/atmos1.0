@@ -1,5 +1,5 @@
 // src/services/targetingIntel.ts
-import { supabase, isSupabaseConnected } from './supabase';
+import { getAuthToken, getUserInfo } from './api';
 
 /* =========================
    TypeScript Interfaces
@@ -94,6 +94,15 @@ export interface TargetingIntelData {
 }
 
 /* =========================
+   API Endpoints Configuration
+========================= */
+
+const API_ENDPOINTS = {
+  TARGETING_INTEL: 'http://localhost:5011',
+  AUTH: 'http://localhost:5003'
+};
+
+/* =========================
    Mock Data (Fallback)
 ========================= */
 
@@ -162,17 +171,78 @@ const mockTargetingIntelData: TargetingIntelData = {
 };
 
 /* =========================
-   Helper Functions
+   Authentication Helper Functions
 ========================= */
 
-const logConnectionStatus = () => {
-  const connected = isSupabaseConnected();
-  console.log(
-    connected
-      ? '✅ Connected to Supabase for targeting intelligence'
-      : '🎭 Using mock targeting data (no database connection)'
-  );
-  return connected;
+/**
+ * Fetch with authentication headers
+ */
+const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<any> => {
+  const token = getAuthToken();
+  
+  console.log('🎯 fetchWithAuth:', { 
+    url, 
+    hasToken: !!token,
+    tokenLength: token?.length,
+    method: options.method || 'GET'
+  });
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
+    ...options.headers,
+  };
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    
+    console.log('🎯 Response status:', response.status, response.statusText);
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('🎯 API Error (JSON):', errorData);
+      } catch {
+        const errorText = await response.text();
+        errorData = { error: errorText || `HTTP error! status: ${response.status}` };
+        console.error('🎯 API Error (text):', errorText);
+      }
+      
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('🎯 API Success:', { url, success: data.success });
+    return data;
+    
+  } catch (error: any) {
+    console.error('🎯 fetchWithAuth error:', {
+      url,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
+};
+
+/**
+ * Check if user is authenticated
+ */
+export const isAuthenticated = (): boolean => {
+  const token = getAuthToken();
+  if (!token) return false;
+  
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const exp = payload.exp * 1000;
+    return Date.now() < exp && payload.user_id && payload.email;
+  } catch {
+    return false;
+  }
 };
 
 /* =========================
@@ -181,27 +251,12 @@ const logConnectionStatus = () => {
 
 /**
  * Normalize database data to match TypeScript interface
- * This fixes missing/incomplete data from the database
  */
 function normalizeTargetingData(dbData: any): TargetingIntelData {
   if (!dbData) {
     console.warn('⚠️ No data to normalize, returning mock data');
     return mockTargetingIntelData;
   }
-
-  // Log the raw data for debugging
-  console.log('🔍 Raw DB data structure:', {
-    id: dbData.id,
-    competitor_name: dbData.competitor_name,
-    hasInterestClusters: !!dbData.interest_clusters,
-    interestClustersType: typeof dbData.interest_clusters,
-    interestClustersValue: dbData.interest_clusters,
-    hasAgeDistribution: !!dbData.age_distribution,
-    hasGeographicSpend: !!dbData.geographic_spend,
-    geographicSpendValue: dbData.geographic_spend,
-    hasAdvancedTargeting: !!dbData.advanced_targeting,
-    advancedTargetingValue: dbData.advanced_targeting
-  });
 
   // Parse advanced_targeting with support for multiple structures
   let purchase_intent = { level: 'Medium', confidence: 0.65 };
@@ -210,17 +265,14 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
   let competitor_overlap = { brands: 2.5, description: 'Overlaps with similar brands in the market' };
 
   if (dbData.advanced_targeting && typeof dbData.advanced_targeting === 'object') {
-    // Handle different possible structures
     const adv = dbData.advanced_targeting;
     
-    // Check for ai_recommendation or insight
     if (adv.ai_recommendation) {
       ai_recommendation = adv.ai_recommendation;
     } else if (adv.insight) {
       ai_recommendation = adv.insight;
     }
 
-    // Check for purchase_intent
     if (adv.purchase_intent && typeof adv.purchase_intent === 'object') {
       purchase_intent = {
         level: adv.purchase_intent.level || 'Medium',
@@ -228,7 +280,6 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
       };
     }
 
-    // Check for device_preference or platform_split
     if (adv.device_preference && typeof adv.device_preference === 'object') {
       device_preference = {
         mobile: adv.device_preference.mobile || 0.75,
@@ -243,7 +294,6 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
       };
     }
 
-    // Check for competitor_overlap
     if (adv.competitor_overlap && typeof adv.competitor_overlap === 'object') {
       competitor_overlap = {
         brands: adv.competitor_overlap.brands || 2.5,
@@ -254,10 +304,8 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
 
   // Create normalized data
   const normalizedData: TargetingIntelData = {
-    // Use mock data as base for all required fields
     ...mockTargetingIntelData,
     
-    // Override with database values where they exist
     id: dbData.id || mockTargetingIntelData.id,
     competitor_id: dbData.competitor_id || mockTargetingIntelData.competitor_id,
     competitor_name: dbData.competitor_name || mockTargetingIntelData.competitor_name,
@@ -268,7 +316,6 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
     created_at: dbData.created_at || mockTargetingIntelData.created_at,
     updated_at: dbData.updated_at || mockTargetingIntelData.updated_at,
     
-    // Handle arrays - ensure they exist
     interest_clusters: Array.isArray(dbData.interest_clusters) && dbData.interest_clusters.length > 0
       ? dbData.interest_clusters.map((cluster: any) => ({
           interest: cluster.interest || 'Unknown Interest',
@@ -277,7 +324,6 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
         }))
       : mockTargetingIntelData.interest_clusters,
     
-    // Handle complex objects
     age_distribution: dbData.age_distribution && typeof dbData.age_distribution === 'object'
       ? {
           '18-24': dbData.age_distribution['18-24'] !== undefined ? Number(dbData.age_distribution['18-24']) : 0,
@@ -298,12 +344,10 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
     
     geographic_spend: dbData.geographic_spend && 
                      typeof dbData.geographic_spend === 'object' && 
-                     Object.keys(dbData.geographic_spend).length > 0 &&
-                     !dbData.geographic_spend.inferred // Check for the {"inferred":true} case
+                     Object.keys(dbData.geographic_spend).length > 0
       ? dbData.geographic_spend
       : mockTargetingIntelData.geographic_spend,
     
-    // Handle other nested objects with fallbacks
     funnel_stage_prediction: dbData.funnel_stage_prediction && typeof dbData.funnel_stage_prediction === 'object'
       ? {
           awareness: {
@@ -369,7 +413,6 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
         }
       : mockTargetingIntelData.bidding_strategy,
     
-    // Use the parsed advanced_targeting structure
     advanced_targeting: {
       purchase_intent,
       ai_recommendation,
@@ -378,293 +421,202 @@ function normalizeTargetingData(dbData: any): TargetingIntelData {
     }
   };
 
-  console.log('✅ Normalized data structure:', {
-    competitor: normalizedData.competitor_name,
-    interestClustersCount: normalizedData.interest_clusters.length,
-    hasValidGeographicSpend: Object.keys(normalizedData.geographic_spend).length > 0,
-    device_preference: normalizedData.advanced_targeting.device_preference,
-    ai_recommendation: normalizedData.advanced_targeting.ai_recommendation
-  });
-
+  console.log('✅ Normalized data for:', normalizedData.competitor_name);
   return normalizedData;
 }
 
 /* =========================
-   API Functions
+   User-Specific API Functions
 ========================= */
 
 /**
- * Fetch all targeting intelligence data
- * Source: targeting_intel table
+ * Fetch targeting intelligence for user's competitors
  */
-export async function fetchAllTargetingIntel(): Promise<TargetingIntelData[]> {
-  const connected = logConnectionStatus();
-
-  if (!connected || !supabase) {
-    console.warn('⚠️ Returning mock data for all targeting intelligence');
+export async function fetchUserTargetingIntel(): Promise<TargetingIntelData[]> {
+  const token = getAuthToken();
+  
+  if (!token) {
+    console.log('🎯 No auth token, using demo data');
     return [mockTargetingIntelData];
   }
 
   try {
-    const { data, error } = await supabase
-      .from('targeting_intel')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Error fetching all targeting intelligence:', error);
-      console.warn('⚠️ Falling back to mock data');
-      return [mockTargetingIntelData];
+    console.log('🎯 Fetching user targeting intelligence...');
+    const userInfo = getUserInfo();
+    if (userInfo) {
+      console.log(`   - For user: ${userInfo.name}`);
     }
-
-    if (!data || data.length === 0) {
-      console.warn('⚠️ No targeting intelligence data found, using mock data');
-      return [mockTargetingIntelData];
-    }
-
-    console.log(`✅ Successfully fetched ${data.length} targeting intelligence records`);
     
-    // Normalize all records
-    return data.map(normalizeTargetingData);
-  } catch (err) {
-    console.error('❌ Unexpected error fetching targeting intelligence:', err);
+    const response = await fetchWithAuth(`${API_ENDPOINTS.TARGETING_INTEL}/api/targeting-intel`);
+    
+    if (response.success) {
+      console.log(`✅ Found ${response.count} targeting records`);
+      
+      if (response.data && Array.isArray(response.data)) {
+        return response.data.map(normalizeTargetingData);
+      } else {
+        console.warn('⚠️ No targeting data array returned, using mock data');
+        return [mockTargetingIntelData];
+      }
+    } else {
+      throw new Error(response.error || 'Failed to load targeting intelligence');
+    }
+  } catch (error: any) {
+    console.error('Error fetching user targeting intelligence:', error.message || error);
     return [mockTargetingIntelData];
   }
 }
 
 /**
- * Fetch targeting intelligence for a specific competitor
+ * Fetch targeting intelligence for a specific competitor (user-specific)
  */
 export async function fetchTargetingIntelByCompetitorId(
   competitorId: string
 ): Promise<TargetingIntelData | null> {
-  const connected = logConnectionStatus();
+  const token = getAuthToken();
 
-  if (!connected || !supabase) {
-    console.warn(`⚠️ Using mock data for competitor ${competitorId}`);
+  if (!token) {
+    console.warn(`🎯 No auth token, using mock data`);
     return mockTargetingIntelData;
   }
 
   try {
-    const { data, error } = await supabase
-      .from('targeting_intel')
-      .select('*')
-      .eq('competitor_id', competitorId)
-      .single();
-
-    if (error) {
-      console.error(`❌ Error fetching targeting for competitor ${competitorId}:`, error);
-      console.warn('⚠️ Falling back to mock data');
-      return mockTargetingIntelData;
-    }
-
-    if (!data) {
+    console.log(`🎯 Fetching targeting for competitor ${competitorId}`);
+    
+    const response = await fetchWithAuth(
+      `${API_ENDPOINTS.TARGETING_INTEL}/api/targeting-intel/${competitorId}`
+    );
+    
+    if (response.success && response.data) {
+      console.log(`✅ Successfully fetched targeting for ${response.data.competitor_name}`);
+      return normalizeTargetingData(response.data);
+    } else {
       console.warn(`⚠️ No targeting data found for competitor ${competitorId}`);
       return null;
     }
-
-    console.log(`✅ Successfully fetched targeting for ${data.competitor_name}`);
-    return normalizeTargetingData(data);
-  } catch (err) {
-    console.error('❌ Unexpected error:', err);
+  } catch (error: any) {
+    console.error(`Error fetching targeting for competitor ${competitorId}:`, error.message || error);
     return mockTargetingIntelData;
   }
 }
 
 /**
- * Fetch latest targeting intelligence
- * (Most recent record)
+ * Fetch latest targeting intelligence (user-specific)
  */
 export async function fetchLatestTargetingIntel(): Promise<TargetingIntelData | null> {
-  const connected = logConnectionStatus();
+  const token = getAuthToken();
 
-  if (!connected || !supabase) {
-    console.warn('⚠️ Using mock data for latest targeting intelligence');
+  if (!token) {
+    console.log('🎯 No auth token, using demo data');
     return mockTargetingIntelData;
   }
 
   try {
-    console.log('🔍 Checking targeting_intel table...');
+    console.log('🎯 Fetching latest targeting intelligence...');
+    const userInfo = getUserInfo();
+    if (userInfo) {
+      console.log(`   - For user: ${userInfo.name}`);
+    }
     
-    // Try a simple select to check table existence
-    const { data: sampleData, error: sampleError } = await supabase
-      .from('targeting_intel')
-      .select('id, competitor_name, created_at')
-      .limit(5);
-
-    if (sampleError) {
-      console.error('❌ Error checking table:', sampleError);
-      console.warn('⚠️ Falling back to mock data');
-      return mockTargetingIntelData;
+    const response = await fetchWithAuth(`${API_ENDPOINTS.TARGETING_INTEL}/api/targeting-intel/latest`);
+    
+    if (response.success) {
+      if (response.data) {
+        console.log(`✅ Successfully fetched latest targeting for ${response.data.competitor_name}`);
+        return normalizeTargetingData(response.data);
+      } else {
+        console.warn('⚠️ No latest targeting data found');
+        return null;
+      }
+    } else {
+      throw new Error(response.error || 'Failed to load latest targeting');
     }
-
-    console.log('🔍 Sample data found:', sampleData);
-
-    if (!sampleData || sampleData.length === 0) {
-      console.warn('⚠️ No records found in targeting_intel table, using mock data');
-      return mockTargetingIntelData;
-    }
-
-    console.log(`✅ Found ${sampleData.length} records in table`);
-
-    // Fetch the latest record
-    const { data, error } = await supabase
-      .from('targeting_intel')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error('❌ Error fetching latest targeting intelligence:', error);
-      console.warn('⚠️ Falling back to mock data');
-      return mockTargetingIntelData;
-    }
-
-    if (!data) {
-      console.warn('⚠️ No latest targeting intelligence found');
-      return mockTargetingIntelData;
-    }
-
-    console.log(`✅ Successfully fetched latest targeting for ${data.competitor_name}`);
-    return normalizeTargetingData(data);
-  } catch (err) {
-    console.error('❌ Unexpected error:', err);
+  } catch (error: any) {
+    console.error('Error fetching latest targeting:', error.message || error);
     return mockTargetingIntelData;
   }
 }
 
 /**
- * Fetch targeting intelligence by competitor name
- */
-export async function fetchTargetingIntelByCompetitorName(
-  competitorName: string
-): Promise<TargetingIntelData | null> {
-  const connected = logConnectionStatus();
-
-  if (!connected || !supabase) {
-    console.warn(`⚠️ Using mock data for competitor ${competitorName}`);
-    return mockTargetingIntelData;
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('targeting_intel')
-      .select('*')
-      .ilike('competitor_name', `%${competitorName}%`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      console.error(`❌ Error fetching targeting for ${competitorName}:`, error);
-      console.warn('⚠️ Falling back to mock data');
-      return mockTargetingIntelData;
-    }
-
-    if (!data) {
-      console.warn(`⚠️ No targeting data found for ${competitorName}`);
-      return null;
-    }
-
-    console.log(`✅ Successfully fetched targeting for ${data.competitor_name}`);
-    return normalizeTargetingData(data);
-  } catch (err) {
-    console.error('❌ Unexpected error:', err);
-    return mockTargetingIntelData;
-  }
-}
-
-/**
- * Create new targeting intelligence record
- */
-export async function createTargetingIntel(
-  data: Omit<TargetingIntelData, 'id' | 'created_at' | 'updated_at'>
-): Promise<TargetingIntelData | null> {
-  const connected = isSupabaseConnected();
-
-  if (!connected || !supabase) {
-    console.error('❌ Cannot create record: No database connection');
-    return null;
-  }
-
-  try {
-    const { data: result, error } = await supabase
-      .from('targeting_intel')
-      .insert([{
-        ...data,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('❌ Error creating targeting intelligence:', error);
-      return null;
-    }
-
-    console.log(`✅ Successfully created targeting for ${result.competitor_name}`);
-    return result as TargetingIntelData;
-  } catch (err) {
-    console.error('❌ Unexpected error:', err);
-    return null;
-  }
-}
-
-/**
- * Test targeting intelligence table connectivity
+ * Test targeting intelligence service connection
  */
 export async function testTargetingIntelConnection(): Promise<{
   connected: boolean;
-  recordCount: number;
-  latestRecord?: string;
+  authenticated: boolean;
+  userHasData: boolean;
   error?: string;
 }> {
-  const connected = isSupabaseConnected();
-
-  if (!connected || !supabase) {
+  const token = getAuthToken();
+  
+  if (!token) {
     return {
       connected: false,
-      recordCount: 0,
-      error: 'Not connected to Supabase',
+      authenticated: false,
+      userHasData: false,
+      error: 'Not authenticated'
     };
   }
 
   try {
-    // Count records
-    const { count, error: countError } = await supabase
-      .from('targeting_intel')
-      .select('*', { count: 'exact', head: true });
-
-    if (countError) {
+    // First try to connect to health endpoint
+    try {
+      const healthResponse = await fetch(`${API_ENDPOINTS.TARGETING_INTEL}/health`);
+      if (!healthResponse.ok) {
+        return {
+          connected: false,
+          authenticated: true,
+          userHasData: false,
+          error: 'Targeting intelligence service not running'
+        };
+      }
+    } catch {
       return {
         connected: false,
-        recordCount: 0,
-        error: countError.message,
+        authenticated: true,
+        userHasData: false,
+        error: 'Cannot connect to targeting intelligence service'
       };
     }
 
-    // Get latest record
-    const { data: latestData, error: latestError } = await supabase
-      .from('targeting_intel')
-      .select('competitor_name, created_at')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
+    // Try to fetch user's targeting data
+    const response = await fetchWithAuth(`${API_ENDPOINTS.TARGETING_INTEL}/api/targeting-intel/latest`);
+    
     return {
       connected: true,
-      recordCount: count || 0,
-      latestRecord: latestData 
-        ? `${latestData.competitor_name} (${new Date(latestData.created_at).toLocaleDateString()})`
-        : undefined,
+      authenticated: true,
+      userHasData: !!response.data
     };
-  } catch (err: any) {
+  } catch (error: any) {
+    console.error('Error testing connection:', error);
     return {
       connected: false,
-      recordCount: 0,
-      error: err.message,
+      authenticated: !!token,
+      userHasData: false,
+      error: error.message || 'Connection test failed'
     };
   }
 }
+
+/**
+ * Generate mock targeting for demo mode
+ */
+function generateMockTargetingForUser(userId?: string): TargetingIntelData[] {
+  const userInfo = getUserInfo();
+  const userName = userInfo?.name || 'Demo User';
+  
+  console.log(`🎯 Generating mock targeting data for ${userName}`);
+  
+  return [{
+    ...mockTargetingIntelData,
+    competitor_name: `${userName}'s Competitor`,
+    data_source: 'MOCK_DEMO'
+  }];
+}
+
+export default {
+  fetchUserTargetingIntel,
+  fetchTargetingIntelByCompetitorId,
+  fetchLatestTargetingIntel,
+  testTargetingIntelConnection,
+  isAuthenticated
+};
