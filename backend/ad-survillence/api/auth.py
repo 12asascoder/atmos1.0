@@ -7,11 +7,21 @@ import datetime
 import jwt
 from dotenv import load_dotenv
 import os
+# ❌ MISSING IMPORT
+from flask_cors import CORS, cross_origin  # Add cross_origin import
+
+# Or just remove the decorator since CORS is already configured globally
 
 load_dotenv()
 
+
 app = Flask(__name__)
-CORS(app)
+CORS(app, 
+     origins=["http://localhost:5173"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"],
+     supports_credentials=True)
+
 
 # Load secret key from environment or generate one
 SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_urlsafe(32)
@@ -22,8 +32,80 @@ supabase: Client = create_client(
     os.environ.get('SUPABASE_KEY')
 )
 
-@app.route('/sign-up', methods=['POST'])
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'service': 'auth',
+        'timestamp': datetime.datetime.now().isoformat(),
+        'port': 5003
+    })
+
+@app.route('/verify', methods=['POST'])
+def verify():
+    """Verify JWT token - NEW ENDPOINT"""
+    try:
+        data = request.get_json()
+        token = data.get('token', '')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Token is required'
+            }), 400
+        
+        # Decode token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        
+        # Get user from database
+        user_response = (
+            supabase.table('users')
+            .select('*')
+            .eq("user_id", payload['user_id'])
+            .execute()
+        )
+        
+        if not user_response.data:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+        
+        user_data = user_response.data[0]
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'user_id': user_data['user_id'],
+                'name': user_data['name'],  # Include name
+                'email': user_data['email'],
+                'onboarding_completed': user_data.get('onboarding_completed', False)
+            }
+        }), 200
+        
+    except jwt.ExpiredSignatureError:
+        return jsonify({
+            'success': False,
+            'error': 'Token has expired'
+        }), 401
+    except jwt.InvalidTokenError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Invalid token: {str(e)}'
+        }), 401
+    except Exception as e:
+        print(f"Error in verify: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'Token verification failed'
+        }), 500
+
+@app.route('/signup', methods=['POST'])
 def signup():
+    """User registration - UPDATED PATH"""
     try:
         data = request.get_json()
 
@@ -94,11 +176,12 @@ def signup():
         if response.data:
             user_data = response.data[0]
 
-            # Create JWT token
+            # Create JWT token WITH NAME FIELD - FIXED
             token = jwt.encode(
                 {
                     'user_id': user_data['user_id'],
                     'email': user_data['email'],
+                    'name': user_data['name'],  # ADD THIS LINE - CRITICAL
                     'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
                 },
                 SECRET_KEY,
@@ -140,9 +223,9 @@ def signup():
             'error': 'An internal server error occurred'
         }), 500
 
-
 @app.route('/complete-onboarding', methods=['POST'])
 def complete_onboarding():
+    """Complete user onboarding - UPDATED PATH"""
     try:
         # Get token from Authorization header
         auth_header = request.headers.get('Authorization')
@@ -228,9 +311,10 @@ def complete_onboarding():
             'error': 'An internal server error occurred'
         }), 500
 
-
 @app.route('/login', methods=['POST'])
+@cross_origin(origin="http://localhost:5173")
 def login():
+    """User login - UPDATED PATH"""
     try:
         data = request.get_json()
 
@@ -287,11 +371,12 @@ def login():
             'last_login': datetime.datetime.utcnow().isoformat()
         }).eq('user_id', user_data['user_id']).execute()
         
-        # Create JWT token
+        # Create JWT token WITH NAME FIELD - FIXED
         token = jwt.encode(
             {
                 'user_id': user_data['user_id'],
                 'email': user_data['email'],
+                'name': user_data['name'],  # ADD THIS LINE - CRITICAL
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
             },
             SECRET_KEY,
@@ -304,7 +389,7 @@ def login():
             'token': token,
             'user': {
                 'user_id': user_data['user_id'],
-                'name': user_data['name'],
+                'name': user_data['name'],  # Make sure this is included
                 'email': user_data['email'],
                 'onboarding_completed': user_data.get('onboarding_completed', False)
             }
@@ -318,10 +403,44 @@ def login():
             'success': False,
             'error': 'An internal server error occurred'
         }), 500
+    
 
+
+@app.route('/')
+def home():
+    """Service home page"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🔐 Authentication Service</title>
+        <style>
+            body { font-family: Arial; padding: 40px; text-align: center; }
+            .status { background: #4CAF50; color: white; padding: 10px; border-radius: 5px; }
+            .endpoints { text-align: left; display: inline-block; margin-top: 20px; }
+            .endpoint { padding: 5px; font-family: monospace; }
+        </style>
+    </head>
+    <body>
+        <h1>🔐 Authentication Service</h1>
+        <div class="status">✅ Running on port 5003</div>
+        <div class="endpoints">
+            <p><strong>Available Endpoints:</strong></p>
+            <div class="endpoint">POST /api/auth/login</div>
+            <div class="endpoint">POST /api/auth/signup</div>
+            <div class="endpoint">POST /api/auth/verify</div>
+            <div class="endpoint">POST /api/auth/complete-onboarding</div>
+            <div class="endpoint">GET /health</div>
+        </div>
+    </body>
+    </html>
+    '''
 
 if __name__ == '__main__':
-    print("Starting Flask server...")
-    print(f"Supabase URL configured: {bool(os.environ.get('SUPABASE_URL'))}")
-    print(f"Supabase Key configured: {bool(os.environ.get('SUPABASE_KEY'))}")
-    app.run(debug=True, port=5100, host='0.0.0.0')
+    print("🚀 Starting Authentication Service...")
+    print(f"📡 Port: 5003")
+    print(f"🔑 SECRET_KEY configured: {bool(SECRET_KEY)}")
+    print(f"🌐 Supabase URL configured: {bool(os.environ.get('SUPABASE_URL'))}")
+    print(f"🔑 Supabase Key configured: {bool(os.environ.get('SUPABASE_KEY'))}")
+    print(f"📋 Endpoints available at: http://localhost:5003")
+    app.run(debug=True, port=5003, host='0.0.0.0')

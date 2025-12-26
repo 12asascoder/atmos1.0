@@ -40,16 +40,43 @@ const TargetingIntel: React.FC = () => {
   }, []);
 
   const loadData = async () => {
-    try {
-      setLoading(true);
-      const latestData = await fetchLatestTargetingIntel();
-      setData(latestData);
-    } catch (err) {
-      setError('Failed to load targeting intelligence data');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    const latestData = await fetchLatestTargetingIntel();
+    console.log('📊 Full data structure:', latestData);
+    console.log('📊 advanced_targeting:', latestData?.advanced_targeting);
+    console.log('📊 device_preference:', latestData?.advanced_targeting?.device_preference);
+    setData(latestData);
+  } catch (err) {
+    setError('Failed to load targeting intelligence data');
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Safe formatting functions
+  const formatNumber = (num: number | undefined | null): string => {
+    if (num === undefined || num === null || isNaN(num)) {
+      return '0';
     }
+    
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toString();
+  };
+
+  const formatCurrency = (amount: number | undefined | null): string => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return '$0';
+    }
+    
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
   if (loading) {
@@ -79,25 +106,41 @@ const TargetingIntel: React.FC = () => {
     );
   }
 
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
+  // Safe data preparation with fallbacks
+  const safeData = {
+    ...data,
+    interest_clusters: Array.isArray(data.interest_clusters) ? data.interest_clusters : [],
+    age_distribution: data.age_distribution || {
+      '18-24': 0, '25-34': 0, '35-44': 0, '45-54': 0, '55+': 0
+    },
+    gender_distribution: data.gender_distribution || {
+      male: 0, female: 0, other: 0
+    },
+    geographic_spend: data.geographic_spend || {},
+    funnel_stage_prediction: data.funnel_stage_prediction || {
+      awareness: { label: 'Awareness', percentage: 0, reach: 0 },
+      consideration: { label: 'Consideration', percentage: 0, reach: 0 },
+      conversion: { label: 'Conversion', percentage: 0, reach: 0 },
+      retention: { label: 'Retention', percentage: 0, reach: 0 }
+    },
+    bidding_strategy: data.bidding_strategy || {
+      hourly: [],
+      avg_cpc: 0,
+      peak_cpm: { value: 0, window: '' },
+      best_time: ''
+    },
+    advanced_targeting: data.advanced_targeting || {
+      purchase_intent: { level: 'Low', confidence: 0 },
+      ai_recommendation: '',
+      device_preference: { mobile: 0, desktop: 0, ios_share: 0 },
+      competitor_overlap: { brands: 0, description: '' }
+    }
   };
 
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  // Prepare data for charts
-  const ageDistributionChartData = Object.entries(data.age_distribution).map(([age, percentage]) => ({
+  // Prepare data for charts with safe access
+  const ageDistributionChartData = Object.entries(safeData.age_distribution).map(([age, percentage]) => ({
     name: age,
-    value: percentage * 100,
+    value: (percentage || 0) * 100,
     color: age === '18-24' ? '#3B82F6' : 
            age === '25-34' ? '#10B981' : 
            age === '35-44' ? '#F59E0B' : 
@@ -105,55 +148,63 @@ const TargetingIntel: React.FC = () => {
            '#8B5CF6'
   }));
 
-  const genderDistributionChartData = Object.entries(data.gender_distribution).map(([gender, percentage]) => ({
+  const genderDistributionChartData = Object.entries(safeData.gender_distribution).map(([gender, percentage]) => ({
     name: gender.charAt(0).toUpperCase() + gender.slice(1),
-    value: percentage * 100,
+    value: (percentage || 0) * 100,
     color: gender === 'male' ? '#3B82F6' : 
            gender === 'female' ? '#EC4899' : 
            '#8B5CF6'
   }));
 
-  const geographicSpendChartData = Object.entries(data.geographic_spend).map(([country, info]) => ({
+  const geographicSpendChartData = Object.entries(safeData.geographic_spend).map(([country, info]) => ({
     country,
-    spend: info.spend,
-    percentage: info.percentage,
-    fill: info.percentage > 30 ? '#3B82F6' : 
-          info.percentage > 15 ? '#10B981' : 
-          info.percentage > 10 ? '#F59E0B' : 
-          info.percentage > 5 ? '#EF4444' : 
+    spend: info?.spend || 0,
+    percentage: info?.percentage || 0,
+    fill: (info?.percentage || 0) > 30 ? '#3B82F6' : 
+          (info?.percentage || 0) > 15 ? '#10B981' : 
+          (info?.percentage || 0) > 10 ? '#F59E0B' : 
+          (info?.percentage || 0) > 5 ? '#EF4444' : 
           '#8B5CF6'
   }));
 
-  const interestClustersChartData = data.interest_clusters.map((cluster, index) => ({
-    name: cluster.interest.split(' ')[0],
-    affinity: cluster.affinity * 100,
-    reach: cluster.reach / 1000, // Convert to K
-    fullName: cluster.interest,
+  const interestClustersChartData = safeData.interest_clusters.map((cluster, index) => ({
+    name: (cluster.interest || 'Interest').split(' ')[0],
+    affinity: (cluster.affinity || 0) * 100,
+    reach: (cluster.reach || 0) / 1000, // Convert to K
+    fullName: cluster.interest || 'Interest',
     color: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][index % 6]
   }));
 
-  const funnelStageChartData = Object.entries(data.funnel_stage_prediction).map(([stage, info]) => ({
+  const funnelStageChartData = Object.entries(safeData.funnel_stage_prediction).map(([stage, info]) => ({
     stage: stage.charAt(0).toUpperCase() + stage.slice(1),
-    percentage: info.percentage,
-    reach: info.reach / 1000000, // Convert to M
+    percentage: info?.percentage || 0,
+    reach: (info?.reach || 0) / 1000000, // Convert to M
     color: stage === 'awareness' ? '#3B82F6' : 
            stage === 'consideration' ? '#10B981' : 
            stage === 'conversion' ? '#F59E0B' : 
            '#EF4444'
   }));
 
-  const biddingHourlyChartData = data.bidding_strategy.hourly.map((hour, index) => ({
-    time: hour.time,
-    cpm: hour.cpm,
-    cpc: hour.cpc,
+  const biddingHourlyChartData = (safeData.bidding_strategy.hourly || []).map((hour, index) => ({
+    time: hour?.time || `${index}:00`,
+    cpm: hour?.cpm || 0,
+    cpc: hour?.cpc || 0,
     hourIndex: index,
-    isPeak: hour.time >= '6pm' && hour.time <= '9pm'
+    isPeak: hour?.time && hour.time >= '6pm' && hour.time <= '9pm'
   }));
 
   const devicePreferenceData = [
-    { name: 'Mobile', value: data.advanced_targeting.device_preference.mobile * 100, color: '#10B981' },
-    { name: 'Desktop', value: data.advanced_targeting.device_preference.desktop * 100, color: '#3B82F6' }
-  ];
+  { 
+    name: 'Mobile', 
+    value: ((safeData.advanced_targeting?.device_preference?.mobile || 0) * 100), 
+    color: '#10B981' 
+  },
+  { 
+    name: 'Desktop', 
+    value: ((safeData.advanced_targeting?.device_preference?.desktop || 0) * 100), 
+    color: '#3B82F6' 
+  }
+];
 
   // Custom tooltip components
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -163,7 +214,7 @@ const TargetingIntel: React.FC = () => {
           <p className="font-semibold text-gray-900">{label}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toFixed(1)}{entry.dataKey === 'reach' ? 'K' : entry.dataKey === 'percentage' ? '%' : ''}
+              {entry.name}: {entry.value?.toFixed(1) || '0'}{entry.dataKey === 'reach' ? 'K' : entry.dataKey === 'percentage' ? '%' : ''}
             </p>
           ))}
         </div>
@@ -184,9 +235,9 @@ const TargetingIntel: React.FC = () => {
             </div>
             <p className="text-gray-600 mt-2">
               AI-powered audience prediction and targeting strategy analysis
-              {data.competitor_name && (
+              {safeData.competitor_name && (
                 <span className="ml-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                  {data.competitor_name}
+                  {safeData.competitor_name}
                 </span>
               )}
             </p>
@@ -195,7 +246,7 @@ const TargetingIntel: React.FC = () => {
             <div className="px-3 py-1 bg-gradient-to-r from-green-100 to-blue-100 text-green-800 rounded-full text-sm font-medium">
               <span className="flex items-center">
                 <Brain className="w-4 h-4 mr-1" />
-                AI Confidence: {(data.confidence_score * 100).toFixed(0)}%
+                AI Confidence: {((safeData.confidence_score || 0) * 100).toFixed(0)}%
               </span>
             </div>
             <button className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm hover:shadow">
@@ -223,7 +274,7 @@ const TargetingIntel: React.FC = () => {
                   <Globe className="w-4 h-4 mr-2 text-blue-500" />
                   Age Distribution
                 </h3>
-                <div className="h-48">
+                <div className="h-48 min-h-[12rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={ageDistributionChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -274,7 +325,7 @@ const TargetingIntel: React.FC = () => {
                   <Users className="w-4 h-4 mr-2 text-purple-500" />
                   Gender Distribution
                 </h3>
-                <div className="h-48">
+                <div className="h-48 min-h-[12rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -320,61 +371,70 @@ const TargetingIntel: React.FC = () => {
               <MapPin className="w-5 h-5 text-gray-400" />
             </div>
             
-            <div className="h-64 mb-6">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={geographicSpendChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="country" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                    tick={{ fill: '#6B7280', fontSize: 11 }}
-                  />
-                  <YAxis 
-                    tickFormatter={(value) => `$${value / 1000}K`}
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => {
-                      if (name === 'spend') return [formatCurrency(value as number), 'Spend'];
-                      return [`${value}%`, 'Percentage'];
-                    }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
-                  />
-                  <Bar 
-                    dataKey="spend" 
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={1500}
-                    name="Spend"
-                  >
-                    {geographicSpendChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <div className="space-y-3">
-              {geographicSpendChartData.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                  <div className="flex items-center">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${item.fill}20` }}>
-                      <Globe className="w-4 h-4" style={{ color: item.fill }} />
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-900">{item.country}</div>
-                      <div className="text-sm text-gray-500">{item.percentage}% of total</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900">{formatCurrency(item.spend)}</div>
-                    <div className="text-sm text-gray-500">Total spend</div>
-                  </div>
+            {geographicSpendChartData.length > 0 ? (
+              <>
+                <div className="h-64 min-h-[16rem] mb-6">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={geographicSpendChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="country" 
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                        tick={{ fill: '#6B7280', fontSize: 11 }}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => `$${value / 1000}K`}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                      />
+                      <Tooltip 
+                        formatter={(value, name) => {
+                          if (name === 'spend') return [formatCurrency(value as number), 'Spend'];
+                          return [`${value}%`, 'Percentage'];
+                        }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                      />
+                      <Bar 
+                        dataKey="spend" 
+                        radius={[4, 4, 0, 0]}
+                        animationDuration={1500}
+                        name="Spend"
+                      >
+                        {geographicSpendChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                
+                <div className="space-y-3">
+                  {geographicSpendChartData.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${item.fill}20` }}>
+                          <Globe className="w-4 h-4" style={{ color: item.fill }} />
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">{item.country}</div>
+                          <div className="text-sm text-gray-500">{item.percentage}% of total</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-gray-900">{formatCurrency(item.spend)}</div>
+                        <div className="text-sm text-gray-500">Total spend</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <MapPin className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No geographic spend data available</p>
+              </div>
+            )}
           </div>
 
           {/* Interest Clusters with Affinity Chart */}
@@ -384,92 +444,101 @@ const TargetingIntel: React.FC = () => {
               <PieChartIcon className="w-5 h-5 text-gray-400" />
             </div>
             
-            <div className="h-64 mb-6">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={interestClustersChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fill: '#6B7280', fontSize: 11 }}
-                  />
-                  <YAxis 
-                    yAxisId="left"
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    tickFormatter={(value) => `${value}%`}
-                  />
-                  <YAxis 
-                    yAxisId="right"
-                    orientation="right"
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    tickFormatter={(value) => `${value}K`}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => {
-                      if (name === 'affinity') return [`${value}%`, 'Affinity'];
-                      return [`${value}K`, 'Reach'];
-                    }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
-                  />
-                  <Bar 
-                    yAxisId="left"
-                    dataKey="affinity" 
-                    radius={[4, 4, 0, 0]}
-                    name="Affinity"
-                    animationDuration={1500}
-                  >
-                    {interestClustersChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="reach" 
-                    stroke="#8B5CF6" 
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name="Reach"
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <div className="space-y-4">
-              {data.interest_clusters.map((cluster: InterestCluster, index: number) => (
-                <div key={index} className="p-4 border border-gray-100 rounded-lg hover:border-blue-200 transition-colors hover:shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900">{cluster.interest}</h3>
-                    <div className="flex items-center">
-                      <div className="px-3 py-1 rounded-full text-sm font-bold" style={{ 
-                        backgroundColor: `${interestClustersChartData[index].color}20`, 
-                        color: interestClustersChartData[index].color 
-                      }}>
-                        {cluster.affinity * 100}% affinity
+            {interestClustersChartData.length > 0 ? (
+              <>
+                <div className="h-64 min-h-[16rem] mb-6">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={interestClustersChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fill: '#6B7280', fontSize: 11 }}
+                      />
+                      <YAxis 
+                        yAxisId="left"
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                        tickFormatter={(value) => `${value}%`}
+                      />
+                      <YAxis 
+                        yAxisId="right"
+                        orientation="right"
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                        tickFormatter={(value) => `${value}K`}
+                      />
+                      <Tooltip 
+                        formatter={(value, name) => {
+                          if (name === 'affinity') return [`${value}%`, 'Affinity'];
+                          return [`${value}K`, 'Reach'];
+                        }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                      />
+                      <Bar 
+                        yAxisId="left"
+                        dataKey="affinity" 
+                        radius={[4, 4, 0, 0]}
+                        name="Affinity"
+                        animationDuration={1500}
+                      >
+                        {interestClustersChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                      <Line 
+                        yAxisId="right"
+                        type="monotone" 
+                        dataKey="reach" 
+                        stroke="#8B5CF6" 
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                        name="Reach"
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                <div className="space-y-4">
+                  {safeData.interest_clusters.map((cluster: InterestCluster, index: number) => (
+                    <div key={index} className="p-4 border border-gray-100 rounded-lg hover:border-blue-200 transition-colors hover:shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-gray-900">{cluster.interest || `Interest ${index + 1}`}</h3>
+                        <div className="flex items-center">
+                          <div className="px-3 py-1 rounded-full text-sm font-bold" style={{ 
+                            backgroundColor: `${interestClustersChartData[index]?.color || '#3B82F6'}20`, 
+                            color: interestClustersChartData[index]?.color || '#3B82F6'
+                          }}>
+                            {(cluster.affinity || 0) * 100}% affinity
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Potential Reach</span>
+                        <div className="flex items-center">
+                          <Users className="w-4 h-4 text-gray-400 mr-2" />
+                          <span className="font-medium text-gray-900">{formatNumber(cluster.reach)}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                          <div 
+                            className="h-2 rounded-full transition-all duration-500"
+                            style={{ 
+                              width: `${(cluster.affinity || 0) * 100}%`,
+                              background: `linear-gradient(90deg, ${interestClustersChartData[index]?.color || '#3B82F6'} 0%, ${interestClustersChartData[index]?.color || '#3B82F6'}80 100%)`
+                            }}
+                          ></div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Potential Reach</span>
-                    <div className="flex items-center">
-                      <Users className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="font-medium text-gray-900">{formatNumber(cluster.reach)}</span>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full transition-all duration-500"
-                        style={{ 
-                          width: `${cluster.affinity * 100}%`,
-                          background: `linear-gradient(90deg, ${interestClustersChartData[index].color} 0%, ${interestClustersChartData[index].color}80 100%)`
-                        }}
-                      ></div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <PieChartIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No interest cluster data available</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -482,7 +551,7 @@ const TargetingIntel: React.FC = () => {
               <BarChart3 className="w-5 h-5 text-gray-400" />
             </div>
             
-            <div className="h-64 mb-6">
+            <div className="h-64 min-h-[16rem] mb-6">
               <ResponsiveContainer width="100%" height="100%">
                 <RadialBarChart 
                   innerRadius="20%" 
@@ -492,10 +561,8 @@ const TargetingIntel: React.FC = () => {
                   endAngle={0}
                 >
                   <RadialBar 
-                    minAngle={15}
                     label={{ position: 'insideStart', fill: '#fff', fontSize: 12 }}
                     background
-                    clockWise
                     dataKey="percentage"
                     animationDuration={1500}
                   >
@@ -506,7 +573,7 @@ const TargetingIntel: React.FC = () => {
                   <Tooltip 
                     formatter={(value, name) => {
                       if (name === 'percentage') return [`${value}%`, 'Stage'];
-                      if (name === 'reach') return [`${value.toFixed(2)}M`, 'Reach'];
+                      if (name === 'reach') return [`${value != null ? (value as number).toFixed(2) : '0'}M`, 'Reach'];
                       return [value, name];
                     }}
                     contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
@@ -523,34 +590,36 @@ const TargetingIntel: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              {Object.entries(data.funnel_stage_prediction).map(([stage, info]) => (
+              {Object.entries(safeData.funnel_stage_prediction).map(([stage, info]) => (
                 <div key={stage} className="text-center p-4 rounded-lg hover:shadow-sm transition-shadow" style={{ 
-                  backgroundColor: funnelStageChartData.find(s => s.stage.toLowerCase() === stage)?.color + '10'
+                  backgroundColor: (funnelStageChartData.find(s => s.stage.toLowerCase() === stage)?.color || '#3B82F6') + '10'
                 }}>
                   <div className="text-sm text-gray-600 capitalize">{stage}</div>
                   <div className="text-2xl font-bold text-gray-900 mt-2" style={{ 
-                    color: funnelStageChartData.find(s => s.stage.toLowerCase() === stage)?.color 
+                    color: funnelStageChartData.find(s => s.stage.toLowerCase() === stage)?.color || '#3B82F6'
                   }}>
-                    {info.percentage}%
+                    {(info?.percentage || 0)}%
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">{formatNumber(info.reach)}</div>
-                  <div className="text-xs text-gray-400 mt-2">{info.label}</div>
+                  <div className="text-sm text-gray-500 mt-1">{formatNumber(info?.reach)}</div>
+                  <div className="text-xs text-gray-400 mt-2">{info?.label || stage}</div>
                 </div>
               ))}
             </div>
 
             {/* AI Recommendation */}
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-              <div className="flex items-start">
-                <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                  <Brain className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-blue-800 mb-2">AI Recommendation</h4>
-                  <p className="text-blue-700">{data.advanced_targeting.ai_recommendation}</p>
+            {safeData.advanced_targeting.ai_recommendation && (
+              <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start">
+                  <div className="p-2 bg-blue-100 rounded-lg mr-3">
+                    <Brain className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-blue-800 mb-2">AI Recommendation</h4>
+                    <p className="text-blue-700">{safeData.advanced_targeting.ai_recommendation}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Advanced Targeting Insights with Charts */}
@@ -569,7 +638,7 @@ const TargetingIntel: React.FC = () => {
                   </div>
                   <h3 className="font-medium text-gray-900">Device Preference</h3>
                 </div>
-                <div className="h-40">
+                <div className="h-40 min-h-[10rem]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -601,7 +670,7 @@ const TargetingIntel: React.FC = () => {
                   ))}
                 </div>
                 <div className="mt-4 text-sm text-gray-600">
-                  <span className="font-medium">iOS share:</span> {(data.advanced_targeting.device_preference.ios_share * 100).toFixed(0)}%
+                 <span className="font-medium">iOS share:</span> {(safeData.advanced_targeting?.device_preference?.ios_share || 0) * 100}%
                 </div>
               </div>
 
@@ -613,12 +682,12 @@ const TargetingIntel: React.FC = () => {
                   </div>
                   <h3 className="font-medium text-gray-900">Purchase Intent</h3>
                 </div>
-                <div className="h-40 flex items-center justify-center">
+                <div className="h-40 min-h-[10rem] flex items-center justify-center">
                   <div className="relative">
                     <div className="w-32 h-32 rounded-full border-8 border-gray-200 flex items-center justify-center">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-gray-900">
-                          {(data.advanced_targeting.purchase_intent.confidence * 100).toFixed(0)}%
+                          {((safeData.advanced_targeting.purchase_intent.confidence || 0) * 100).toFixed(0)}%
                         </div>
                         <div className="text-sm text-gray-600">Confidence</div>
                       </div>
@@ -626,20 +695,20 @@ const TargetingIntel: React.FC = () => {
                     <div 
                       className="absolute top-0 left-0 w-32 h-32 rounded-full border-8 border-transparent border-t-green-500 border-r-green-500"
                       style={{
-                        transform: `rotate(${data.advanced_targeting.purchase_intent.confidence * 360}deg)`
+                        transform: `rotate(${(safeData.advanced_targeting.purchase_intent.confidence || 0) * 360}deg)`
                       }}
                     ></div>
                   </div>
                 </div>
                 <div className="mt-4 text-center">
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    data.advanced_targeting.purchase_intent.level === 'High' 
+                    safeData.advanced_targeting.purchase_intent.level === 'High' 
                       ? 'bg-green-100 text-green-800'
-                      : data.advanced_targeting.purchase_intent.level === 'Medium'
+                      : safeData.advanced_targeting.purchase_intent.level === 'Medium'
                       ? 'bg-yellow-100 text-yellow-800'
                       : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {data.advanced_targeting.purchase_intent.level} Intent
+                    {safeData.advanced_targeting.purchase_intent.level || 'Low'} Intent
                   </span>
                 </div>
               </div>
@@ -650,11 +719,11 @@ const TargetingIntel: React.FC = () => {
               <h3 className="font-medium text-gray-900 mb-4">Competitor Overlap Analysis</h3>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-3xl font-bold text-gray-900">{data.advanced_targeting.competitor_overlap.brands}</div>
+                  <div className="text-3xl font-bold text-gray-900">{safeData.advanced_targeting.competitor_overlap.brands || 0}</div>
                   <div className="text-sm text-gray-600">brands overlapping</div>
                 </div>
                 <div className="text-gray-600 text-sm max-w-[200px] bg-gray-50 p-3 rounded-lg">
-                  {data.advanced_targeting.competitor_overlap.description}
+                  {safeData.advanced_targeting.competitor_overlap.description || 'No overlap data available'}
                 </div>
               </div>
             </div>
@@ -667,109 +736,118 @@ const TargetingIntel: React.FC = () => {
               <Clock className="w-5 h-5 text-gray-400" />
             </div>
             
-            <div className="h-64 mb-6">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={biddingHourlyChartData}>
-                  <defs>
-                    <linearGradient id="colorCpm" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorCpc" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="time" 
-                    tick={{ fill: '#6B7280', fontSize: 11 }}
-                  />
-                  <YAxis 
-                    tickFormatter={(value) => `$${value}`}
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => {
-                      const label = name === 'cpm' ? 'CPM' : 'CPC';
-                      return [`$${value}`, label];
-                    }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
-                  />
-                  <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey="cpm" 
-                    stroke="#3B82F6" 
-                    fillOpacity={1} 
-                    fill="url(#colorCpm)" 
-                    name="CPM"
-                    strokeWidth={2}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="cpc" 
-                    stroke="#10B981" 
-                    fillOpacity={1} 
-                    fill="url(#colorCpc)" 
-                    name="CPC"
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {biddingHourlyChartData.length > 0 ? (
+              <>
+                <div className="h-64 min-h-[16rem] mb-6">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={biddingHourlyChartData}>
+                      <defs>
+                        <linearGradient id="colorCpm" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorCpc" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="time" 
+                        tick={{ fill: '#6B7280', fontSize: 11 }}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => `$${value}`}
+                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                      />
+                      <Tooltip 
+                        formatter={(value, name) => {
+                          const label = name === 'cpm' ? 'CPM' : 'CPC';
+                          return [`$${value}`, label];
+                        }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                      />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="cpm" 
+                        stroke="#3B82F6" 
+                        fillOpacity={1} 
+                        fill="url(#colorCpm)" 
+                        name="CPM"
+                        strokeWidth={2}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="cpc" 
+                        stroke="#10B981" 
+                        fillOpacity={1} 
+                        fill="url(#colorCpc)" 
+                        name="CPC"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* CPM vs CPC */}
-              <div>
-                <h3 className="font-medium text-gray-900 mb-4 flex items-center">
-                  <DollarSign className="w-4 h-4 mr-2 text-blue-500" />
-                  Cost Metrics
-                </h3>
-                <div className="space-y-4">
-                  <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
-                    <div className="text-sm text-gray-600">Peak CPM</div>
-                    <div className="text-2xl font-bold text-blue-600">
-                      ${data.bidding_strategy.peak_cpm.value.toFixed(2)}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* CPM vs CPC */}
+                  <div>
+                    <h3 className="font-medium text-gray-900 mb-4 flex items-center">
+                      <DollarSign className="w-4 h-4 mr-2 text-blue-500" />
+                      Cost Metrics
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                        <div className="text-sm text-gray-600">Peak CPM</div>
+                        <div className="text-2xl font-bold text-blue-600">
+                          ${(safeData.bidding_strategy.peak_cpm.value || 0).toFixed(2)}
+                        </div>
+                        <div className="text-sm text-gray-500">{safeData.bidding_strategy.peak_cpm.window || 'Not available'}</div>
+                      </div>
+                      <div className="p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border border-green-200">
+                        <div className="text-sm text-gray-600">Average CPC</div>
+                        <div className="text-2xl font-bold text-green-600">
+                          ${(safeData.bidding_strategy.avg_cpc || 0).toFixed(2)}
+                        </div>
+                        <div className="text-sm text-gray-500">Daily average</div>
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">{data.bidding_strategy.peak_cpm.window}</div>
                   </div>
-                  <div className="p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border border-green-200">
-                    <div className="text-sm text-gray-600">Average CPC</div>
-                    <div className="text-2xl font-bold text-green-600">
-                      ${data.bidding_strategy.avg_cpc.toFixed(2)}
+
+                  {/* Best Time */}
+                  <div>
+                    <h3 className="font-medium text-gray-900 mb-4 flex items-center">
+                      <Clock className="w-4 h-4 mr-2 text-purple-500" />
+                      Optimal Timing
+                    </h3>
+                    <div className="p-6 bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                      <div className="flex items-center mb-4">
+                        <div className="p-2 bg-purple-100 rounded-lg mr-3">
+                          <Clock className="w-6 h-6 text-purple-500" />
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Best Performance Window</div>
+                          <div className="text-xl font-bold text-purple-700">{safeData.bidding_strategy.best_time || 'Not available'}</div>
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-sm">Lowest cost per acquisition during this period</p>
+                      <div className="mt-4 flex items-center text-sm text-gray-500">
+                        <div className="w-3 h-3 bg-blue-400 rounded mr-2"></div>
+                        <span>CPM: ${(safeData.bidding_strategy.avg_cpc || 0).toFixed(2)} avg</span>
+                        <div className="w-3 h-3 bg-green-400 rounded mx-4"></div>
+                        <span>CPC: ${(safeData.bidding_strategy.avg_cpc || 0).toFixed(2)} avg</span>
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">Daily average</div>
                   </div>
                 </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Clock className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No bidding strategy data available</p>
               </div>
-
-              {/* Best Time */}
-              <div>
-                <h3 className="font-medium text-gray-900 mb-4 flex items-center">
-                  <Clock className="w-4 h-4 mr-2 text-purple-500" />
-                  Optimal Timing
-                </h3>
-                <div className="p-6 bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
-                  <div className="flex items-center mb-4">
-                    <div className="p-2 bg-purple-100 rounded-lg mr-3">
-                      <Clock className="w-6 h-6 text-purple-500" />
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-600">Best Performance Window</div>
-                      <div className="text-xl font-bold text-purple-700">{data.bidding_strategy.best_time}</div>
-                    </div>
-                  </div>
-                  <p className="text-gray-600 text-sm">Lowest cost per acquisition during this period</p>
-                  <div className="mt-4 flex items-center text-sm text-gray-500">
-                    <div className="w-3 h-3 bg-blue-400 rounded mr-2"></div>
-                    <span>CPM: ${data.bidding_strategy.avg_cpc.toFixed(2)} avg</span>
-                    <div className="w-3 h-3 bg-green-400 rounded mx-4"></div>
-                    <span>CPC: ${data.bidding_strategy.avg_cpc.toFixed(2)} avg</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

@@ -46,7 +46,7 @@ export function SignupForm({
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://localhost:5003/sign-up", {
+      const response = await fetch("http://localhost:5003/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

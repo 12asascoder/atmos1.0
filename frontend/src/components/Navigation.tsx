@@ -114,13 +114,13 @@ const Navigation: React.FC = () => {
             <>
               <NavbarButton 
                 variant="secondary"
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('login')}
               >
                 Sign In
               </NavbarButton>
               <NavbarButton 
                 variant="gradient"
-                onClick={() => navigate('/sign-up')}
+                onClick={() => navigate('sign-up')}
               >
                 Get Started
               </NavbarButton>
