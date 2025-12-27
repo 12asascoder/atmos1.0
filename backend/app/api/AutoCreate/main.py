@@ -1,5 +1,5 @@
 """
-AdSurveillance Main Server - Analytics & Dashboard Module
+AutoCreate Campaign Module Main Server
 """
 import subprocess
 import sys
@@ -16,67 +16,55 @@ sys.path.append(BASE_DIR)
 from config import settings
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["*"])  # For development only
 
-# AdSurveillance Services
+# AutoCreate Services
 SERVICES = [
     {
-        "name": "🔐 Authentication Service",
-        "script": "api/auth.py",
-        "port": settings.AUTH_PORT,
-        "health_check": f"http://localhost:{settings.AUTH_PORT}/health",
-        "description": "Handles user login, registration, and JWT tokens",
+        "name": "🎯 Audience Service",
+        "script": "api/audience_step.py",
+        "port": settings.AUDIENCE_PORT,
+        "health_check": f"http://localhost:{settings.AUDIENCE_PORT}/",
+        "description": "Handles audience targeting and insights",
         "endpoints": [
-            "POST /login",
-            "POST /signup",
-            "POST /verify",
-            "POST /complete-onboarding"
+            "POST /api/audience/targeting",
+            "GET /api/audience/targeting/<campaign_id>",
+            "POST /api/audience/insights"
         ]
     },
     {
-        "name": "📊 User Analytics Service",
-        "script": "api/user_analytics.py",
-        "port": settings.ANALYTICS_PORT,
-        "health_check": f"http://localhost:{settings.ANALYTICS_PORT}/health",
-        "description": "Provides user-specific analytics and charts",
+        "name": "💰 Budget Testing Service",
+        "script": "api/budget_testing.py",
+        "port": settings.BUDGET_TESTING_PORT,
+        "health_check": f"http://localhost:{settings.BUDGET_TESTING_PORT}/",
+        "description": "Handles budget configuration and testing",
         "endpoints": [
-            "GET /api/analytics/summary",
-            "GET /api/analytics/competitor-spend"
+            "POST /api/budget-testing/save",
+            "GET /api/budget-testing/<campaign_id>",
+            "POST /api/budget-testing/projections"
         ]
     },
     {
-        "name": "📈 Daily Metrics Service",
-        "script": "api/daily_metrics.py",
-        "port": settings.DAILY_METRICS_PORT,
-        "health_check": f"http://localhost:{settings.DAILY_METRICS_PORT}/health",
-        "description": "Handles daily metrics and summary data",
+        "name": "🎯 Campaign Goal Service",
+        "script": "api/campaign_goal.py",
+        "port": settings.CAMPAIGN_GOAL_PORT,
+        "health_check": f"http://localhost:{settings.CAMPAIGN_GOAL_PORT}/",
+        "description": "Handles campaign goal selection",
         "endpoints": [
-            "POST /api/daily-metrics",
-            "GET /api/summary-metrics"
+            "POST /api/campaign-goal",
+            "PUT /api/campaign-goal/<campaign_id>"
         ]
     },
     {
-        "name": "🏢 Competitors Service",
-        "script": "api/competitors.py",
-        "port": settings.COMPETITORS_PORT,
-        "health_check": f"http://localhost:{settings.COMPETITORS_PORT}/health",
-        "description": "Manages user competitors and tracking",
+        "name": "✍️ Copy Messaging Service",
+        "script": "api/copy_messaging.py",
+        "port": settings.COPY_MESSAGING_PORT,
+        "health_check": f"http://localhost:{settings.COPY_MESSAGING_PORT}/api/health",
+        "description": "Generates and analyzes marketing copy using AI",
         "endpoints": [
-            "GET /api/competitors",
-            "POST /api/competitors",
-            "DELETE /api/competitors/<id>"
-        ]
-    },
-    {
-        "name": "🎯 Targeting Intel Service",
-        "script": "api/targeting_intel.py",
-        "port": settings.TARGETING_INTEL_PORT,
-        "health_check": f"http://localhost:{settings.TARGETING_INTEL_PORT}/health",
-        "description": "Provides targeting intelligence data",
-        "endpoints": [
-            "GET /api/targeting-intel",
-            "GET /api/targeting-intel/<competitor_id>",
-            "GET /api/targeting-intel/latest"
+            "POST /api/generate-copy",
+            "POST /api/analyze-copy",
+            "POST /api/save-campaign"
         ]
     }
 ]
@@ -173,11 +161,11 @@ def start_service(service_config: dict):
         return None
 
 def start_all_services():
-    """Start all AdSurveillance services"""
+    """Start all AutoCreate services"""
     global processes
     
     print("=" * 60)
-    print("🚀 Starting AdSurveillance Analytics Services")
+    print("🚀 Starting AutoCreate Campaign Services")
     print("=" * 60)
     
     print(f"📁 Base directory: {BASE_DIR}")
@@ -188,6 +176,7 @@ def start_all_services():
     print(f"   Supabase URL: {'✅ Configured' if settings.SUPABASE_URL else '❌ Not configured'}")
     print(f"   Supabase Key: {'✅ Configured' if settings.SUPABASE_KEY else '❌ Not configured'}")
     print(f"   Secret Key: {'✅ Configured' if settings.SECRET_KEY else '❌ Not configured'}")
+    print(f"   Groq API Key: {'✅ Configured' if settings.GROQ_API_KEY else '❌ Not configured'}")
     
     # Check if api directory exists
     api_dir = os.path.join(BASE_DIR, 'api')
@@ -228,7 +217,7 @@ def start_all_services():
         time.sleep(2)  # Small delay between starts
     
     # Find available port for main dashboard
-    main_port = settings.MAIN_PORT_1
+    main_port = settings.MAIN_PORT_2
     if not is_port_available(main_port):
         print(f"⚠️  Port {main_port} is in use, finding alternative...")
         main_port = find_available_port(main_port)
@@ -322,13 +311,14 @@ def dashboard():
         })
     
     return jsonify({
-        'name': 'AdSurveillance Analytics Dashboard',
+        'name': 'AutoCreate Campaign Module',
         'version': '1.0.0',
         'status': 'running',
-        'main_port': settings.MAIN_PORT_1,
+        'main_port': settings.MAIN_PORT_2,
         'services': service_status,
         'environment': {
             'supabase_configured': bool(settings.SUPABASE_URL),
+            'groq_configured': bool(settings.GROQ_API_KEY),
             'total_services': len(SERVICES),
             'running_services': len(processes)
         }
@@ -339,8 +329,8 @@ def health():
     """Health check endpoint for main server"""
     return jsonify({
         'status': 'healthy',
-        'server': 'adsurveillance-main',
-        'port': settings.MAIN_PORT_1,
+        'server': 'autocreate-main',
+        'port': settings.MAIN_PORT_2,
         'running_services': len(processes)
     })
 

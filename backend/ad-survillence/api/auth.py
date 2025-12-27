@@ -16,11 +16,7 @@ load_dotenv()
 
 
 app = Flask(__name__)
-CORS(app, 
-     origins=["http://localhost:5173"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization"],
-     supports_credentials=True)
+CORS(app, origins=["*"])  # For development only
 
 
 # Load secret key from environment or generate one
@@ -312,11 +308,14 @@ def complete_onboarding():
         }), 500
 
 @app.route('/login', methods=['POST'])
-@cross_origin(origin="http://localhost:5173")
+@cross_origin(origin="http://192.0.0.2:5173", supports_credentials=True)
 def login():
     """User login - UPDATED PATH"""
     try:
         data = request.get_json()
+
+        if request.method == 'OPTIONS':
+            return _build_cors_preflight_response()
 
         if not data:
             return jsonify({
@@ -405,6 +404,14 @@ def login():
         }), 500
     
 
+def _build_cors_preflight_response():
+    response = jsonify()
+    response.headers.add("Access-Control-Allow-Origin", "http://192.0.0.2:5173")
+    response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization")
+    response.headers.add('Access-Control-Allow-Methods', "GET,POST,OPTIONS")
+    response.headers.add('Access-Control-Allow-Credentials', "true")
+    response.headers.add('Access-Control-Max-Age', "3600")
+    return response
 
 @app.route('/')
 def home():

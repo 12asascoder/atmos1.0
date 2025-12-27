@@ -22,7 +22,14 @@ load_dotenv()
 
 # Create Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["*"], supports_credentials=True)
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    return response
 
 # Get JWT secret for manual decoding
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
@@ -113,9 +120,16 @@ def decode_jwt_token(token):
         raise ValueError(f"Failed to decode token: {str(e)}")
 
 # In budget_testing_backend.py, update the save_budget_testing() function:
-@budget_testing_bp.route('/api/budget-testing/save', methods=['POST'])
+@budget_testing_bp.route('/api/budget-testing/save', methods=['POST','OPTIONS'])
 def save_budget_testing():
     """Save budget and testing data to Supabase"""
+
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
     try:
         data = request.get_json()
         
@@ -214,9 +228,17 @@ def save_budget_testing():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@budget_testing_bp.route('/api/budget-testing/<campaign_id>', methods=['GET'])
+@budget_testing_bp.route('/api/budget-testing/<campaign_id>', methods=['GET','OPTIONS'])
 def get_budget_testing(campaign_id):
     """Get budget and testing data for a specific campaign"""
+
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     try:
         token = request.args.get('token') or request.headers.get('Authorization')
         
@@ -281,9 +303,17 @@ def get_budget_testing(campaign_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@budget_testing_bp.route('/api/budget-testing/projections', methods=['POST'])
+@budget_testing_bp.route('/api/budget-testing/projections', methods=['POST','OPTIONS'])
 def get_projections():
     """Get performance projections based on budget and testing configuration"""
+
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         
@@ -460,9 +490,18 @@ def get_testing_options():
     
     return jsonify({'testing_options': testing_options}), 200
 
-@budget_testing_bp.route('/api/budget-testing/budget-recommendations', methods=['GET'])
+@budget_testing_bp.route('/api/budget-testing/budget-recommendations', methods=['GET','OPTIONS'])
 def get_budget_recommendations():
     """Get budget recommendations based on campaign goal"""
+
+
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     goal = request.args.get('goal', 'consideration')
     
     recommendations = {
@@ -524,4 +563,4 @@ if __name__ == '__main__':
     print("   POST /api/budget-testing/projections - Get performance projections")
     print("   GET  /api/budget-testing/testing-options - Get testing options")
     print("   GET  /api/budget-testing/budget-recommendations - Get budget recommendations")
-    app.run(debug=True, port=5008)
+    app.run(debug=True, port=5012)

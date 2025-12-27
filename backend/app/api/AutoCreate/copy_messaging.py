@@ -19,13 +19,16 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+# Configure CORS properly
+CORS(app, origins=["*"], supports_credentials=True)
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    return response
 
 # Get JWT secret from environment (same as your auth service)
 JWT_SECRET = os.getenv('SECRET_KEY')
@@ -387,9 +390,19 @@ def health_check():
         'jwt_secret_configured': bool(JWT_SECRET != 'your-jwt-secret-key-here')
     }), 200
 
-@app.route('/api/generate-copy', methods=['POST'])
+@app.route('/api/generate-copy', methods=['POST','OPTIONS'])
 def generate_copy():
     """Generate copy variations using Groq"""
+
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+
+    
     try:
         data = request.json
         if not data:
@@ -435,9 +448,17 @@ def generate_copy():
             'error': f'Failed to generate copy: {str(e)}'
         }), 500
 
-@app.route('/api/analyze-copy', methods=['POST'])
+@app.route('/api/analyze-copy', methods=['POST','OPTIONS'])
 def analyze_copy():
     """Analyze selected copy performance"""
+
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
     try:
         data = request.json
         if not data:
@@ -479,9 +500,19 @@ def analyze_copy():
         }), 500
 
 # In copy_messaging.py, update the save_campaign function:
-@app.route('/api/save-campaign', methods=['POST'])
+@app.route('/api/save-campaign', methods=['POST','OPTIONS'])
+
+
 def save_campaign():
     """Save campaign data to Supabase"""
+
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
     try:
         data = request.json
         if not data:
@@ -534,9 +565,18 @@ def save_campaign():
             'error': f'Failed to save campaign: {str(e)}'
         }), 500
 
-@app.route('/api/decode-token', methods=['POST'])
+@app.route('/api/decode-token', methods=['POST','OPTIONS'])
 def decode_token():
     """Helper endpoint to decode JWT token (for debugging)"""
+
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.json
         token = data.get('token')
@@ -568,7 +608,7 @@ if __name__ == '__main__':
         logger.warning("WARNING: Supabase credentials not fully configured")
     
     # Use port 5007
-    port = int(os.environ.get('PORT', 5007))
+    port = int(os.environ.get('PORT', 5013))
     logger.info(f"Starting Copy Messaging API on port {port}")
     logger.info(f"Groq configured: {bool(GROQ_API_KEY)}")
     logger.info(f"Supabase configured: {bool(SUPABASE_URL and SUPABASE_KEY)}")

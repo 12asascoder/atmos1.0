@@ -1,14 +1,11 @@
-# audience_backend.py
+# audience_step.py
 from flask import Flask, Blueprint, request, jsonify
-from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
 import json
 from datetime import datetime
 import os
 from dotenv import load_dotenv
 import jwt
-# Add this import at the top
-from unified_db import decode_jwt_token, handle_campaign_save, get_active_campaign
 
 # Try to import supabase
 try:
@@ -23,11 +20,20 @@ load_dotenv()
 
 # Create Flask app
 app = Flask(__name__)
-CORS(app)
+
+# Configure CORS properly
+CORS(app, origins=["*"], supports_credentials=True)
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    return response
 
 # JWT Configuration
 app.config['JWT_SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
-jwt_manager = JWTManager(app)
 
 # Get JWT secret for manual decoding
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
@@ -128,9 +134,17 @@ def decode_jwt_token(token):
         raise ValueError(f"Failed to decode token: {str(e)}")
 
 # In audience_backend.py, update the save_audience_targeting() function:
-@audience_bp.route('/api/audience/targeting', methods=['POST'])
+@audience_bp.route('/api/audience/targeting', methods=['POST', 'OPTIONS'])
 def save_audience_targeting():
     """Save audience targeting data to Supabase"""
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         
@@ -187,8 +201,27 @@ def save_audience_targeting():
         # Get campaign_id if provided
         campaign_id = data.get('campaign_id')
         
-        # Use unified handler
-        save_result = handle_campaign_save(supabase, current_user, audience_data, campaign_id)
+        # Use unified handler (you need to implement or import this)
+        # For now, let's create a simple version
+        try:
+            if campaign_id:
+                # Update existing
+                response = supabase.table('auto_create').update(audience_data).eq('id', campaign_id).eq('user_id', current_user).execute()
+                save_result = {'success': True, 'campaign_id': campaign_id}
+            else:
+                # Create new
+                import uuid
+                new_campaign_id = str(uuid.uuid4())
+                campaign_data = {
+                    'id': new_campaign_id,
+                    'user_id': current_user,
+                    'campaign_status': 'draft',
+                    **audience_data
+                }
+                response = supabase.table('auto_create').insert(campaign_data).execute()
+                save_result = {'success': True, 'campaign_id': new_campaign_id}
+        except Exception as e:
+            save_result = {'success': False, 'error': str(e)}
         
         if not save_result['success']:
             return jsonify({'error': save_result.get('error', 'Failed to save audience data')}), 500
@@ -202,9 +235,18 @@ def save_audience_targeting():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@audience_bp.route('/api/audience/targeting/<campaign_id>', methods=['GET'])
+# Add OPTIONS to all other routes as well...
+@audience_bp.route('/api/audience/targeting/<campaign_id>', methods=['GET', 'OPTIONS'])
 def get_audience_targeting(campaign_id):
     """Get audience targeting data for a specific campaign"""
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response, 200
+    
     try:
         token = request.args.get('token') or request.headers.get('Authorization')
         
@@ -248,9 +290,17 @@ def get_audience_targeting(campaign_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@audience_bp.route('/api/audience/insights', methods=['POST'])
+@audience_bp.route('/api/audience/insights', methods=['POST', 'OPTIONS'])
 def get_audience_insights():
     """Get AI-powered audience insights based on targeting"""
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'POST,OPTIONS')
+        return response, 200
+    
     try:
         data = request.get_json()
         
@@ -343,9 +393,17 @@ def get_audience_insights():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@audience_bp.route('/api/audience/preset-interests', methods=['GET'])
+@audience_bp.route('/api/audience/preset-interests', methods=['GET', 'OPTIONS'])
 def get_preset_interests():
     """Get preset interest categories"""
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response, 200
+    
     interests = [
         {
             'id': 'fitness',
@@ -407,9 +465,17 @@ def get_preset_interests():
     
     return jsonify({'interests': interests}), 200
 
-@audience_bp.route('/api/audience/preset-locations', methods=['GET'])
+@audience_bp.route('/api/audience/preset-locations', methods=['GET', 'OPTIONS'])
 def get_preset_locations():
     """Get preset location options"""
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        response = jsonify({'status': 'preflight'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
+        return response, 200
+    
     locations = [
         {
             'name': 'India',
@@ -474,7 +540,7 @@ def get_preset_locations():
 # Register blueprint
 app.register_blueprint(audience_bp)
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def health_check():
     return jsonify({
         'status': 'healthy', 
@@ -497,4 +563,4 @@ if __name__ == '__main__':
     print("   POST /api/audience/insights - Get AI insights")
     print("   GET  /api/audience/preset-interests - Get preset interests")
     print("   GET  /api/audience/preset-locations - Get preset locations")
-    app.run(debug=True, port=5006)
+    app.run(debug=True, port=5006, host='0.0.0.0')

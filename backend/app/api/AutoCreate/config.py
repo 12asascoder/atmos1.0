@@ -1,5 +1,5 @@
 """
-AdSurveillance Configuration
+AutoCreate Configuration
 """
 import os
 from dotenv import load_dotenv
@@ -8,21 +8,21 @@ load_dotenv()
 
 class Settings:
     # Server ports
-    MAIN_PORT_1 = int(os.getenv("MAIN_PORT_1", 5010))
-    AUTH_PORT = int(os.getenv("AUTH_PORT", 5003))
-    ANALYTICS_PORT = int(os.getenv("ANALYTICS_PORT", 5007))
-    DAILY_METRICS_PORT = int(os.getenv("DAILY_METRICS_PORT", 5008))
-    COMPETITORS_PORT = int(os.getenv("COMPETITORS_PORT", 5009))
-    TARGETING_INTEL_PORT = int(os.getenv("TARGETING_INTEL_PORT", 5011))
+    MAIN_PORT_2 = int(os.getenv("MAIN_PORT_2", 5014))
+    AUDIENCE_PORT = int(os.getenv("AUDIENCE_PORT", 5006))
+    BUDGET_TESTING_PORT = int(os.getenv("BUDGET_TESTING_PORT", 5012))
+    CAMPAIGN_GOAL_PORT = int(os.getenv("CAMPAIGN_GOAL_PORT", 5005))
+    COPY_MESSAGING_PORT = int(os.getenv("COPY_MESSAGING_PORT", 5013))
     
-    # JWT Configuration
+    # JWT Configuration (should be same as AdSurveillance for shared auth)
     SECRET_KEY = os.getenv("SECRET_KEY", "your-fallback-secret-key-change-in-production")
-    JWT_ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
     
     # Supabase Configuration
     SUPABASE_URL = os.getenv("SUPABASE_URL", "")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+    
+    # Groq API (for copy messaging)
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     
     # CORS Configuration
     CORS_ORIGINS = [
