@@ -1,415 +1,143 @@
 """
-AdSurveillance Main Server - Analytics & Dashboard Module
+AdSurveillance Main Orchestrator - Updated to include Ads Fetching Service
 """
+
 import subprocess
 import sys
 import os
-import signal
 import time
-import socket
-from flask import Flask, jsonify
-from flask_cors import CORS
+from datetime import datetime
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
-
-from config import settings
-
-app = Flask(__name__)
-CORS(app)
-
-# AdSurveillance Services
-SERVICES = [
-    {
-        "name": "🔐 Authentication Service",
-        "script": "api/auth.py",
-        "port": settings.AUTH_PORT,
-        "health_check": f"http://localhost:{settings.AUTH_PORT}/health",
-        "description": "Handles user login, registration, and JWT tokens",
-        "endpoints": [
-            "POST /login",
-            "POST /signup",
-            "POST /verify",
-            "POST /complete-onboarding"
-        ]
-    },
-    {
-        "name": "📊 User Analytics Service",
-        "script": "api/user_analytics.py",
-        "port": settings.ANALYTICS_PORT,
-        "health_check": f"http://localhost:{settings.ANALYTICS_PORT}/health",
-        "description": "Provides user-specific analytics and charts",
-        "endpoints": [
-            "GET /api/analytics/summary",
-            "GET /api/analytics/competitor-spend"
-        ]
-    },
-    {
-        "name": "📈 Daily Metrics Service",
-        "script": "api/daily_metrics.py",
-        "port": settings.DAILY_METRICS_PORT,
-        "health_check": f"http://localhost:{settings.DAILY_METRICS_PORT}/health",
-        "description": "Handles daily metrics and summary data",
-        "endpoints": [
-            "POST /api/daily-metrics",
-            "GET /api/summary-metrics"
-        ]
-    },
-    {
-        "name": "🏢 Competitors Service",
-        "script": "api/competitors.py",
-        "port": settings.COMPETITORS_PORT,
-        "health_check": f"http://localhost:{settings.COMPETITORS_PORT}/health",
-        "description": "Manages user competitors and tracking",
-        "endpoints": [
-            "GET /api/competitors",
-            "POST /api/competitors",
-            "DELETE /api/competitors/<id>"
-        ]
-    },
-    {
-        "name": "🎯 Targeting Intel Service",
-        "script": "api/targeting_intel.py",
-        "port": settings.TARGETING_INTEL_PORT,
-        "health_check": f"http://localhost:{settings.TARGETING_INTEL_PORT}/health",
-        "description": "Provides targeting intelligence data",
-        "endpoints": [
-            "GET /api/targeting-intel",
-            "GET /api/targeting-intel/<competitor_id>",
-            "GET /api/targeting-intel/latest"
-        ]
-    }
-]
-
-processes = []
-
-def is_port_available(port: int) -> bool:
-    """Check if a port is available"""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(('localhost', port))
-            return True
-        except socket.error:
-            return False
-
-def find_available_port(start_port: int) -> int:
-    """Find an available port starting from start_port"""
-    port = start_port
-    while not is_port_available(port):
-        port += 1
-    return port
-
-def start_service(service_config: dict):
-    """Start a single service"""
-    script_path = os.path.join(BASE_DIR, service_config["script"])
+def run_service(name, path, env_vars=None):
+    """Start a service in a subprocess"""
+    print(f"\n{'='*60}")
+    print(f"🚀 Starting {name}")
+    print(f"{'='*60}")
     
-    print(f"🔍 Looking for script at: {script_path}")
+    env = os.environ.copy()
+    if env_vars:
+        env.update(env_vars)
     
-    if not os.path.exists(script_path):
-        print(f"❌ Script not found: {script_path}")
-        print(f"   Current working directory: {os.getcwd()}")
-        api_dir = os.path.join(BASE_DIR, 'api')
-        if os.path.exists(api_dir):
-            print(f"   Files in api directory: {os.listdir(api_dir)}")
-        else:
-            print("   No api directory found")
-        
-        # Create stub file if missing
-        create_stub_file(service_config["script"], service_config["port"])
-        script_path = os.path.join(BASE_DIR, service_config["script"])
-    
-    # Build command
-    cmd = [sys.executable, script_path]
-    
-    print(f"🚀 Starting {service_config['name']} on port {service_config['port']}...")
-    
-    # Start process
+    cmd = [sys.executable, path]
     process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        cmd, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE, 
         text=True,
-        bufsize=1,
-        universal_newlines=True
+        env=env
     )
     
-    # Add process info
-    process.service_name = service_config["name"]
-    process.service_port = service_config["port"]
-    
-    # Start thread to read output
+    # Print output in real-time
     import threading
     
-    def read_output(proc, name):
-        for line in iter(proc.stdout.readline, ''):
-            if line:
-                print(f"[{name}] {line.strip()}")
-        # Read stderr as well
-        for line in iter(proc.stderr.readline, ''):
-            if line:
-                print(f"[{name}-ERROR] {line.strip()}")
+    def read_output(stream, prefix):
+        for line in iter(stream.readline, ''):
+            if line.strip():
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                print(f"[{timestamp}][{prefix}] {line.strip()}")
     
-    threading.Thread(
-        target=read_output,
-        args=(process, service_config["name"][:10]),
-        daemon=True
-    ).start()
+    threading.Thread(target=read_output, args=(process.stdout, name), daemon=True).start()
+    threading.Thread(target=read_output, args=(process.stderr, f"{name}_ERROR"), daemon=True).start()
     
-    # Wait longer to see if it starts successfully
-    time.sleep(3)
-    
-    if process.poll() is None:
-        print(f"✅ {service_config['name']} started successfully (PID: {process.pid})")
-        return process
-    else:
-        print(f"❌ Failed to start {service_config['name']}")
-        # Try to read error output
-        try:
-            stdout, stderr = process.communicate(timeout=1)
-            if stderr:
-                print(f"   Error output: {stderr[:200]}")
-        except:
-            pass
-        return None
+    return process
 
-def start_all_services():
-    """Start all AdSurveillance services"""
-    global processes
-    
-    print("=" * 60)
-    print("🚀 Starting AdSurveillance Analytics Services")
-    print("=" * 60)
-    
-    print(f"📁 Base directory: {BASE_DIR}")
-    print(f"📁 Working directory: {os.getcwd()}")
-    
-    # Check environment
-    print("\n📋 Environment Check:")
-    print(f"   Supabase URL: {'✅ Configured' if settings.SUPABASE_URL else '❌ Not configured'}")
-    print(f"   Supabase Key: {'✅ Configured' if settings.SUPABASE_KEY else '❌ Not configured'}")
-    print(f"   Secret Key: {'✅ Configured' if settings.SECRET_KEY else '❌ Not configured'}")
-    
-    # Check if api directory exists
-    api_dir = os.path.join(BASE_DIR, 'api')
-    if not os.path.exists(api_dir):
-        print(f"\n❌ API directory not found at: {api_dir}")
-        print("💡 Creating api directory...")
-        os.makedirs(api_dir, exist_ok=True)
-        with open(os.path.join(api_dir, '__init__.py'), 'w') as f:
-            f.write('# API services package\n')
-        print(f"✅ Created api directory at: {api_dir}")
-    
-    # Check for required files
-    print("\n📁 Checking service files:")
-    for service in SERVICES:
-        script_path = os.path.join(BASE_DIR, service["script"])
-        if os.path.exists(script_path):
-            # Check if it's a stub or actual code
-            with open(script_path, 'r') as f:
-                content = f.read()
-                if 'stub service' in content:
-                    print(f"   ⚠️  {service['name']}: {service['script']} (STUB)")
-                else:
-                    print(f"   ✅ {service['name']}: {service['script']} (ACTUAL CODE)")
-        else:
-            print(f"   ❌ {service['name']}: {service['script']} (NOT FOUND)")
-            print(f"      Creating stub file...")
-            create_stub_file(service["script"], service["port"])
-    
-    # Start each service
-    print("\n🔧 Starting Services:")
-    
-    for service in SERVICES:
-        process = start_service(service)
-        if process:
-            processes.append(process)
-        else:
-            print(f"   ⚠️  Could not start {service['name']}")
-        time.sleep(2)  # Small delay between starts
-    
-    # Find available port for main dashboard
-    main_port = settings.MAIN_PORT_1
-    if not is_port_available(main_port):
-        print(f"⚠️  Port {main_port} is in use, finding alternative...")
-        main_port = find_available_port(main_port)
-        print(f"✅ Using port {main_port} for main dashboard")
-    
-    print("\n" + "=" * 60)
-    print(f"📊 Started {len(processes)}/{len(SERVICES)} services")
-    print(f"🌐 Main dashboard: http://localhost:{main_port}")
-    print("=" * 60)
-    
-    return main_port
-
-def create_stub_file(script_path, port):
-    """Create a stub service file if missing"""
-    full_path = os.path.join(BASE_DIR, script_path)
-    dir_name = os.path.dirname(full_path)
-    
-    # Create directory if needed
-    os.makedirs(dir_name, exist_ok=True)
-    
-    # Create a simple Flask stub
-    stub_content = f'''"""
-Stub service for {os.path.basename(script_path)}
-"""
-from flask import Flask, jsonify
-from flask_cors import CORS
-import os
-
-app = Flask(__name__)
-CORS(app)
-
-@app.route('/')
-def health_check():
-    return jsonify({{
-        'status': 'stub',
-        'service': '{os.path.basename(script_path).replace(".py", "")}',
-        'message': 'This is a stub service. Replace with actual implementation.',
-        'port': {port}
-    }}), 200
-
-@app.route('/api/health')
-def api_health():
-    return jsonify({{
-        'status': 'healthy',
-        'service': '{os.path.basename(script_path).replace(".py", "")}'
-    }}), 200
-
-if __name__ == '__main__':
-    print(f"🚀 Stub service for {os.path.basename(script_path)} starting...")
-    print(f"📡 Running on port {port}")
-    app.run(debug=True, port={port})
-'''
-    
-    with open(full_path, 'w') as f:
-        f.write(stub_content)
-    
-    print(f"      Created stub file at: {full_path}")
-
-def stop_all_services():
-    """Stop all running services"""
-    global processes
-    
-    print("\n🛑 Stopping all services...")
-    
-    for process in processes:
-        if process and process.poll() is None:
-            print(f"   Stopping {getattr(process, 'service_name', 'Unknown')}...")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-    
-    processes.clear()
-    print("✅ All services stopped")
-
-# Flask routes for main dashboard
-@app.route('/')
-def dashboard():
-    """Main dashboard showing all services"""
-    service_status = []
-    
-    for service in SERVICES:
-        service_status.append({
-            'name': service['name'],
-            'port': service['port'],
-            'description': service['description'],
-            'health_url': service['health_check'],
-            'endpoints': service['endpoints'],
-            'script': service['script']
-        })
-    
-    return jsonify({
-        'name': 'AdSurveillance Analytics Dashboard',
-        'version': '1.0.0',
-        'status': 'running',
-        'main_port': settings.MAIN_PORT_1,
-        'services': service_status,
-        'environment': {
-            'supabase_configured': bool(settings.SUPABASE_URL),
-            'total_services': len(SERVICES),
-            'running_services': len(processes)
-        }
-    })
-
-@app.route('/health')
-def health():
-    """Health check endpoint for main server"""
-    return jsonify({
-        'status': 'healthy',
-        'server': 'adsurveillance-main',
-        'port': settings.MAIN_PORT_1,
-        'running_services': len(processes)
-    })
-
-@app.route('/services/status')
-def services_status():
-    """Get detailed status of all services"""
-    status_list = []
-    
-    for process in processes:
-        if process.poll() is None:
-            status = 'running'
-        else:
-            status = 'stopped'
-        
-        status_list.append({
-            'name': getattr(process, 'service_name', 'Unknown'),
-            'pid': process.pid,
-            'status': status,
-            'port': getattr(process, 'service_port', 'Unknown')
-        })
-    
-    return jsonify({
-        'total_services': len(SERVICES),
-        'running_services': len([p for p in processes if p.poll() is None]),
-        'services': status_list
-    })
-
-@app.route('/services/restart', methods=['POST'])
-def restart_services():
-    """Restart all services"""
-    stop_all_services()
-    actual_main_port = start_all_services()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Services restarted',
-        'running_services': len(processes),
-        'main_port': actual_main_port
-    })
-
-def signal_handler(signum, frame):
-    """Handle Ctrl+C"""
-    print("\n🛑 Received shutdown signal...")
-    stop_all_services()
-    sys.exit(0)
-
-if __name__ == "__main__":
-    # Set up signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+def main():
+    """Main orchestrator function"""
+    processes = []
     
     try:
+        print("\n" + "="*60)
+        print("🎯 AdSurveillance System Startup")
+        print("="*60)
+        
+        # Get base directory
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Service configurations
+        services = [
+            {
+                "name": "Auth Service",
+                "path": os.path.join(base_dir, "api", "auth.py"),
+                "port": 5003
+            },
+            {
+                "name": "Ads Fetching Service",  # NEW SERVICE
+                "path": os.path.join(base_dir, "api", "ads_fetching.py"),
+                "port": 5004
+            },
+            {
+                "name": "User Analytics Service",
+                "path": os.path.join(base_dir, "api", "user_analytics.py"),
+                "port": 5007
+            },
+            {
+                "name": "Daily Metrics Service",
+                "path": os.path.join(base_dir, "api", "daily_metrics.py"),
+                "port": 5008
+            },
+            {
+                "name": "Competitors Service",
+                "path": os.path.join(base_dir, "api", "competitors.py"),
+                "port": 5009
+            },
+            {
+                "name": "Targeting Intel Service",
+                "path": os.path.join(base_dir, "api", "targeting_intel.py"),
+                "port": 5011
+            }
+        ]
+        
         # Start all services
-        actual_main_port = start_all_services()
+        for service in services:
+            env_vars = {
+                "FLASK_ENV": "development",
+                "FLASK_DEBUG": "1"
+            }
+            process = run_service(service["name"], service["path"], env_vars)
+            processes.append((service["name"], process, service["port"]))
+            time.sleep(2)  # Stagger startup
         
-        # Start the main Flask dashboard
-        print(f"\n🌐 Starting main dashboard on port {actual_main_port}...")
-        app.run(
-            debug=False,
-            port=actual_main_port,
-            host='0.0.0.0',
-            use_reloader=False
-        )
+        # Display dashboard
+        print("\n" + "="*60)
+        print("✅ All Services Started Successfully!")
+        print("="*60)
+        print("\n📊 Service Dashboard:")
+        print("-" * 60)
         
+        for name, _, port in processes:
+            status = "✅ RUNNING"
+            print(f"{name:<25} | Port: {port:<6} | Status: {status}")
+        
+        print("-" * 60)
+        print("\n🔗 Quick Access Links:")
+        print(f"• Main Dashboard:    http://localhost:{os.getenv('MAIN_PORT_1', 5010)}")
+        print(f"• Auth Service:      http://localhost:5003")
+        print(f"• Ads Fetching:      http://localhost:5004")  # NEW
+        print(f"• Analytics:         http://localhost:5007")
+        print(f"• Competitors:       http://localhost:5009")
+        print(f"• Targeting Intel:   http://localhost:5011")
+        print("\n🔄 Ads Refresh Endpoint: POST http://localhost:5004/api/refresh-ads")
+        print("📊 Check Status: GET http://localhost:5004/api/refresh-status/<job_id>")
+        print("\n" + "="*60)
+        print("Press Ctrl+C to stop all services...")
+        print("="*60)
+        
+        # Keep main process alive
+        while True:
+            time.sleep(1)
+            
     except KeyboardInterrupt:
-        print("\n🛑 Shutting down...")
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        stop_all_services()
+        print("\n\n" + "="*60)
+        print("🛑 Stopping all services...")
+        print("="*60)
+        
+        for name, process, _ in processes:
+            print(f"Stopping {name}...")
+            process.terminate()
+            process.wait(timeout=5)
+        
+        print("\n✅ All services stopped successfully")
+        print("="*60)
+
+if __name__ == "__main__":
+    main()

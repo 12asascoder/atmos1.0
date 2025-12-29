@@ -16,7 +16,11 @@ sys.path.append(BASE_DIR)
 from config import settings
 
 app = Flask(__name__)
-CORS(app, origins=["*"])  # For development only
+CORS(
+    app,
+    origins=["http://localhost:5173/"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 
 # AutoCreate Services
 SERVICES = [

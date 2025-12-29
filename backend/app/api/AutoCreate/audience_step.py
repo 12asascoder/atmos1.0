@@ -22,7 +22,11 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configure CORS properly
-CORS(app, origins=["*"], supports_credentials=True)
+CORS(
+    app,
+    origins=["http://localhost:5173/"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 
 # Add CORS headers to all responses
 @app.after_request

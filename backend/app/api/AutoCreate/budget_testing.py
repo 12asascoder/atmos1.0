@@ -22,7 +22,11 @@ load_dotenv()
 
 # Create Flask app
 app = Flask(__name__)
-CORS(app, origins=["*"], supports_credentials=True)
+CORS(
+    app,
+    origins=["http://localhost:5173/"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 
 @app.after_request
 def after_request(response):
