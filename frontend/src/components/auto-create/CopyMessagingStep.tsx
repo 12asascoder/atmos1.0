@@ -3,7 +3,7 @@ import { Sparkles, Copy, ThumbsUp, RefreshCw, MessageSquare, Wand2, Loader, Chec
 import { motion } from 'framer-motion';
 
 // API service
-const API_BASE_URL = 'http://localhost:5013/api';
+const API_BASE_URL = 'http://localhost:5050/api';
 
 interface CopyVariation {
   id: number;
@@ -316,6 +316,38 @@ const CopyMessagingStep: React.FC<CopyMessagingStepProps> = ({
       setIsSaving(false);
     }
   };
+
+  const normalizeVariations = (rawData: any): CopyVariation[] => {
+  // Case 1: Backend already returns variations[]
+  if (Array.isArray(rawData?.variations)) {
+    return rawData.variations.map((v: any, i: number) => ({
+      id: i + 1,
+      headline: v.headline ?? 'Untitled',
+      body: v.body ?? '',
+      cta: v.cta ?? 'Learn More',
+      score: v.score ?? 90,
+      engagement: v.engagement ?? '+25%',
+      color: v.color ?? 'from-cyan-500 to-teal-600'
+    }));
+  }
+
+  // Case 2: Backend returns single copy object
+  if (rawData?.headline || rawData?.body || rawData?.cta) {
+    return [{
+      id: 1,
+      headline: rawData.headline ?? 'Untitled',
+      body: rawData.body ?? '',
+      cta: rawData.cta ?? 'Learn More',
+      score: rawData.score ?? 90,
+      engagement: rawData.engagement ?? '+25%',
+      color: rawData.color ?? 'from-cyan-500 to-teal-600'
+    }];
+  }
+
+  // Case 3: Unknown format → fallback
+  throw new Error('Invalid copy format received from server');
+};
+
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

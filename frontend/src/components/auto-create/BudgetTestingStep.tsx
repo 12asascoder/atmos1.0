@@ -53,7 +53,7 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
 
   const loadTestingOptions = async () => {
     try {
-      const response = await fetch('http://localhost:5012/api/budget-testing/testing-options');
+      const response = await fetch('http://localhost:5050/api/budget-testing/testing-options');
       const data = await response.json();
       setTestingOptions(data.testing_options);
     } catch (error) {
@@ -64,7 +64,7 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
   const loadBudgetRecommendations = async () => {
     try {
       // You can pass campaign goal here if available
-      const response = await fetch('http://localhost:5012/api/budget-testing/budget-recommendations');
+      const response = await fetch('http://localhost:5050/api/budget-testing/budget-recommendations');
       const data = await response.json();
       setBudgetOptions(data.recommendations);
     } catch (error) {
@@ -93,7 +93,7 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5012/api/budget-testing/projections', {
+      const response = await fetch('http://localhost:5050/api/budget-testing/projections', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -166,7 +166,7 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
         });
       }
 
-      const response = await fetch('http://localhost:5012/api/budget-testing/save', {
+      const response = await fetch('http://localhost:5050/api/budget-testing/save', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
