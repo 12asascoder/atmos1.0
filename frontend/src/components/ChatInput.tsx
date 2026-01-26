@@ -44,7 +44,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5001/genai_call', {
+      const response = await fetch('http://127.0.0.1:5002/genai_call', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       console.error('Error calling API:', error);
       
       // Pass error message to parent
-      onResponseReceived('I apologize, but I encountered an error connecting to the server. Please make sure the backend is running on http://localhost:5001 and try again.');
+      onResponseReceived('I apologize, but I encountered an error connecting to the server. Please make sure the backend is running on http://localhost:5002 and try again.');
     } finally {
       setIsLoading(false);
     }

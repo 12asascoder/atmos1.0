@@ -1,18 +1,19 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Blueprint
 from groq import Groq
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)
+# Create blueprint instead of Flask app
+image_gen_bp = Blueprint('image_gen', __name__)
+
+# Initialize CORS for this blueprint
+CORS(image_gen_bp)
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY")) 
 groq_model = "llama-3.3-70b-versatile"
-
 
 ALLOWED_KEYWORDS = {
     # broad marketing
@@ -39,7 +40,7 @@ ALLOWED_ACTIONS = {
 }
 
 REFUSAL_TEXT = (
-    "Sorry—I’m a marketing-only assistant. "
+    "Sorry—I'm a marketing-only assistant. "
     "I can help with advertising strategy, brand campaigns, audiences, creatives, channels, and measurement."
 )
 
@@ -57,7 +58,7 @@ HARD SCOPE LIMIT
 - Allowed: advertising strategy, brand positioning, audience insights, creative concepts, media/channel planning, measurement/attribution, funnels/landing pages, budgeting, policy/compliance.
 - Disallowed: any topic outside marketing/advertising (coding help, math, legal, medical, homework, personal advice, politics unrelated to ads, etc.).
 - If a user asks for anything disallowed, respond with exactly:
-  "Sorry—I’m a marketing-only assistant. I can help with advertising strategy, brand campaigns, audiences, creatives, channels, and measurement."
+  "Sorry—I'm a marketing-only assistant. I can help with advertising strategy, brand campaigns, audiences, creatives, channels, and measurement."
 
 SECURITY & RELIABILITY
 - Never reveal chain-of-thought or internal reasoning. Provide conclusions only.
@@ -98,8 +99,10 @@ Do not deviate from the refusal line for disallowed topics.
 """
 
 
-@app.route('/genai_call', methods=['POST'])
+@image_gen_bp.route('/genai_call', methods=['POST', 'OPTIONS'])
 def chat():
+    if request.method == 'OPTIONS':
+        return '', 200
     data = request.get_json(silent=True) or {}
     user_msg = (data.get("message") or "").strip()
     action = (data.get("action") or "chat").strip()
@@ -172,7 +175,3 @@ def chat():
     except Exception as e:
         # Return a generic error; avoid leaking internal details
         return jsonify({"error": f"generation_failed: {str(e)}"}), 500
-
-
-if __name__ == "__main__":
-    app.run(debug=True, port=5001)

@@ -1,5 +1,5 @@
 import React from 'react';
-import TargetingIntel from '../components/TargetingIntel';
+import TargetingIntel from '../components/Targetingintel';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 

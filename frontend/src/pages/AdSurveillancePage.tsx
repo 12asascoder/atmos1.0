@@ -1,4 +1,4 @@
-import AdSurveillance from '../components/AdSurveillance';
+import AdSurveillance from '../components/Sample_1_AdSurveillance';
 
 const AdSurveillancePage = () => {
   return <AdSurveillance />;

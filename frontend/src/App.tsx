@@ -8,7 +8,7 @@ import SignUpPage from './pages/Signup';
 import Home from './pages/Home';
 import OnboardingPage from './components/OnBoarding';
 import AutoCreate from './pages/AutoCreate';
-import AdSurveillance from './components/AdSurveillance';
+import AdSurveillance from './components/Sample_1_AdSurveillance';
 import AdDetailPage from './pages/AdDetailPage';
 import VideoAnalysis from './pages/VideoAnalysis';
 
@@ -105,7 +105,7 @@ function App() {
           }
         />
 
-        {/* ✅ NEW: Targeting Intelligence */}
+        
         <Route
           path="/targeting_intel"
           element={

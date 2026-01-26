@@ -1,52 +1,353 @@
-# creative_assets.py
-from flask import Blueprint, request, jsonify
+# creative_assets.py - Fixed video generation function
 import os
 import base64
-import mimetypes
-from datetime import datetime
 import uuid
+import json
+import time
 import requests
-from runwayml import RunwayML, TaskFailedError
-import traceback
+from flask import Blueprint, request, jsonify
+from dotenv import load_dotenv
+import logging
+import mimetypes
 
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create blueprint
 creative_assets_bp = Blueprint('creative_assets', __name__)
 
-# Initialize Runway ML client globally
-RUNWAY_API_KEY = os.environ.get('RUNWAY_API_KEY', 'your_runway_api_key_here')
-client = RunwayML(api_key=RUNWAY_API_KEY) if RUNWAY_API_KEY != 'your_runway_api_key_here' else None
+# API Configuration
+RUNWAY_API_KEY = os.environ.get('RUNWAY_API_KEY')
+RUNWAY_BASE_URL = "https://api.dev.runwayml.com"
+RUNWAY_VERSION = "2024-11-06"
 
-# Storage for campaigns and assets (in production, use a database)
-# Using dict as in-memory store
-campaigns = {}
-user_uploads = {}
+# Headers for Runway API
+RUNWAY_HEADERS = {
+    "Authorization": f"Bearer {RUNWAY_API_KEY}",
+    "X-Runway-Version": RUNWAY_VERSION,
+    "Content-Type": "application/json",
+}
 
-# Updated trend configuration for 2026
-RECENT_TRENDS = {
-    "2026_q1": [
-        "AI-assisted personalized content",
-        "Hyper-realistic 3D renders",
-        "Sustainable and eco-conscious branding",
-        "Neo-brutalism with soft gradients",
-        "Mixed reality integration concepts",
-        "Nostalgic futurism (retro-futurism)",
-        "Dynamic variable fonts",
-        "Biomorphic organic shapes",
-        "Dark mode optimized with vibrant accents",
-        "Minimalist-maximalist contrast"
-    ],
-    "social_media_trends_2026": [
-        "AI-powered personalized feed content",
-        "Vertical immersive experiences",
-        "Short-form interactive storytelling",
-        "Voice and audio-first content",
-        "Real-time collaborative content",
-        "AR filter brand integrations",
-        "Ephemeral content with permanence",
-        "Community-driven content creation",
-        "Predictive trend adaptation",
-        "Cross-platform narrative continuity"
-    ],
-    "design_trends_2026": [
+# Valid ratios for Runway ML API (from error message)
+VALID_RATIOS = [
+    "1024:1024",  # Square
+    "1080:1080",  # Square HD
+    "1168:880",   # Desktop
+    "1360:768",   # Widescreen
+    "1440:1080",  # 4:3 HD
+    "1080:1440",  # Portrait HD
+    "1808:768",   # Ultra Wide
+    "1920:1080",  # Full HD
+    "1080:1920",  # Portrait Full HD
+    "2112:912",   # Super Wide
+    "1280:720",   # HD
+    "720:1280",   # Portrait HD
+    "720:720",    # Square Mobile
+    "960:720",    # 4:3 Mobile
+    "720:960",    # Portrait Mobile
+    "1680:720"    # Cinematic
+]
+
+# In-memory storage for tasks (in production, use a database)
+tasks_store = {}
+generation_tasks = {}  # Separate storage for tracking individual tasks
+
+# -----------------------------
+# Helper Functions
+# -----------------------------
+
+def get_image_as_data_uri(image_path_or_data: str, filename: str = None) -> str:
+    """
+    Convert image to data URI format as per Runway documentation
+    """
+    try:
+        # If it's already a data URI, return it
+        if image_path_or_data.startswith('data:image/'):
+            return image_path_or_data
+        
+        # If it's base64 data, create data URI
+        elif ',' in image_path_or_data:
+            # It's already a data URI without the prefix
+            mime_type = 'image/jpeg'
+            if filename:
+                content_type = mimetypes.guess_type(filename)[0]
+                if content_type and content_type.startswith('image/'):
+                    mime_type = content_type
+            
+            return f"data:{mime_type};base64,{image_path_or_data}"
+        
+        else:
+            # It's raw base64, add the prefix
+            content_type = 'image/jpeg'
+            if filename:
+                file_ext = filename.lower().split('.')[-1]
+                if file_ext in ['png', 'jpg', 'jpeg', 'webp', 'gif']:
+                    content_type = f"image/{'jpeg' if file_ext in ['jpg', 'jpeg'] else file_ext}"
+            
+            return f"data:{content_type};base64,{image_path_or_data}"
+            
+    except Exception as e:
+        logger.error(f"Error creating data URI: {e}")
+        # Default to JPEG
+        return f"data:image/jpeg;base64,{image_path_or_data}"
+
+def save_image_locally(image_data: str, filename: str) -> str:
+    """Save base64 image data to local file system"""
+    try:
+        # Create output directory if it doesn't exist
+        output_dir = "uploaded_images"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Decode base64 data
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
+        image_bytes = base64.b64decode(image_data)
+        
+        # Save file
+        filepath = os.path.join(output_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(image_bytes)
+        
+        logger.info(f"Image saved to: {filepath}")
+        return filepath
+    except Exception as e:
+        logger.error(f"Error saving image: {e}")
+        return None
+
+def create_image_generation_task(image_data_uri: str, prompt_text: str, variation_number: int = 1):
+    """
+    Create image generation task using Runway ML with proper format as per documentation
+    Uses @product to reference the uploaded image in the prompt
+    """
+    try:
+        # Choose a valid ratio - using 1:1 square for product images
+        ratio = "1024:1024"  # Square ratio for social media/product images
+        
+        # Prepare request payload according to Runway documentation
+        # Use @product to reference the uploaded image in the prompt
+        payload = {
+            "model": "gen4_image",  # Using gen4_image model as per documentation
+            "ratio": ratio,
+            "promptText": f"@product {prompt_text}",
+            "referenceImages": [
+                {
+                    "uri": image_data_uri,
+                    "tag": "product"
+                }
+            ]
+        }
+        
+        logger.info(f"Creating image generation task with ratio: {ratio}")
+        logger.info(f"Prompt: {prompt_text[:100]}...")
+        
+        # Make API call
+        response = requests.post(
+            f"{RUNWAY_BASE_URL}/v1/text_to_image",
+            headers=RUNWAY_HEADERS,
+            json=payload,
+            timeout=30
+        )
+        
+        # Log the response for debugging
+        logger.info(f"Runway API Response Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            logger.error(f"Runway API Error: {response.text}")
+            response.raise_for_status()
+        
+        task_data = response.json()
+        task_id = task_data.get("id")
+        
+        if not task_id:
+            logger.error(f"No task ID returned: {task_data}")
+            raise Exception("No task ID returned from Runway API")
+        
+        logger.info(f"Image generation task created: {task_id}")
+        return task_id
+        
+    except Exception as e:
+        logger.error(f"Error creating image generation task: {e}")
+        raise
+
+def create_video_generation_task(image_data_uri: str, prompt_text: str, variation_number: int = 1):
+    """
+    Create video generation task using Runway ML
+    Based on the working template from the user
+    """
+    try:
+        # Prepare request payload for video generation according to Runway API
+        # The API expects either a single promptImage (string) or an array of promptImages
+        
+        # Clean up the prompt - remove @product reference for videos
+        clean_prompt = prompt_text.replace("@product", "").strip()
+        
+        payload = {
+            "model": "veo3.1",
+            "promptImage": image_data_uri,  # Single image as data URI
+            "promptText": clean_prompt,
+            "ratio": "1280:720",  # Valid ratio for video
+            "duration": 4,  # Must be 4, 6, or 8 seconds
+        }
+        
+        logger.info(f"Creating video generation task with prompt: {clean_prompt[:100]}...")
+        logger.info(f"Using image data URI: {image_data_uri[:80]}...")
+        
+        # Make API call
+        response = requests.post(
+            f"{RUNWAY_BASE_URL}/v1/image_to_video",
+            headers=RUNWAY_HEADERS,
+            json=payload,
+            timeout=30
+        )
+        
+        logger.info(f"Runway Video API Response Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            logger.error(f"Runway Video API Error: {response.text}")
+            # Log more details for debugging
+            try:
+                error_details = response.json()
+                logger.error(f"Error details: {error_details}")
+            except:
+                logger.error(f"Raw error response: {response.text}")
+            response.raise_for_status()
+        
+        task_data = response.json()
+        task_id = task_data.get("id")
+        
+        if not task_id:
+            logger.error(f"No task ID returned for video: {task_data}")
+            raise Exception("No task ID returned from Runway API for video")
+        
+        logger.info(f"Video generation task created: {task_id}")
+        return task_id
+        
+    except Exception as e:
+        logger.error(f"Error creating video generation task: {e}")
+        raise
+
+def poll_task_status(task_id: str):
+    """Poll Runway ML task status with better logging"""
+    max_attempts = 300  # 5 minutes with 1-second intervals (videos take longer)
+    attempt = 0
+    
+    logger.info(f"Starting to poll task: {task_id}")
+    
+    while attempt < max_attempts:
+        try:
+            # Get task status
+            response = requests.get(
+                f"{RUNWAY_BASE_URL}/v1/tasks/{task_id}",
+                headers=RUNWAY_HEADERS,
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Task status check failed: {response.status_code}")
+                time.sleep(2)
+                attempt += 1
+                continue
+            
+            task = response.json()
+            status = task.get("status")
+            
+            logger.info(f"Task {task_id} status: {status} (attempt {attempt + 1}/{max_attempts})")
+            
+            if status == "SUCCEEDED":
+                output_url = task.get("output", [])[0] if task.get("output") else None
+                if output_url:
+                    logger.info(f"Task {task_id} succeeded! Output URL: {output_url[:50]}...")
+                    return {
+                        "success": True,
+                        "status": status,
+                        "output_url": output_url,
+                        "task_id": task_id
+                    }
+                else:
+                    logger.error(f"Task succeeded but no output URL: {task}")
+            
+            elif status == "FAILED":
+                error_message = task.get("error", {}).get("message", "Unknown error")
+                logger.error(f"Task {task_id} failed: {error_message}")
+                return {
+                    "success": False,
+                    "status": status,
+                    "error": error_message
+                }
+            elif status == "CANCELED":
+                logger.error(f"Task {task_id} was canceled")
+                return {
+                    "success": False,
+                    "status": status,
+                    "error": "Task was canceled"
+                }
+            
+            # Wait before next poll (longer for videos)
+            time.sleep(2)
+            attempt += 1
+            
+        except Exception as e:
+            logger.error(f"Error polling task {task_id}: {e}")
+            time.sleep(2)
+            attempt += 1
+    
+    logger.error(f"Task {task_id} polling timeout after {max_attempts} seconds")
+    return {
+        "success": False,
+        "status": "TIMEOUT",
+        "error": f"Task polling timeout after {max_attempts} seconds"
+    }
+
+def download_and_store_asset(output_url: str, task_id: str, asset_type: str, campaign_id: str):
+    """Download generated asset and store it"""
+    try:
+        logger.info(f"Downloading asset from: {output_url[:50]}...")
+        
+        # Download the asset
+        response = requests.get(output_url, timeout=60)  # Longer timeout for videos
+        response.raise_for_status()
+        
+        # Convert to base64
+        asset_data = base64.b64encode(response.content).decode('utf-8')
+        mime_type = 'video/mp4' if asset_type == 'video' else 'image/png'
+        data_uri = f"data:{mime_type};base64,{asset_data}"
+        
+        # Generate filename
+        timestamp = int(time.time())
+        asset_filename = f"{campaign_id}_{task_id}_{timestamp}_{asset_type}.{'mp4' if asset_type == 'video' else 'png'}"
+        
+        # Save locally
+        output_dir = "generated_videos" if asset_type == 'video' else "generated_images"
+        os.makedirs(output_dir, exist_ok=True)
+        filepath = os.path.join(output_dir, asset_filename)
+        
+        with open(filepath, "wb") as f:
+            f.write(response.content)
+        
+        logger.info(f"Asset saved to: {filepath} (size: {len(response.content)} bytes)")
+        
+        return {
+            "data_uri": data_uri,
+            "local_path": filepath,
+            "filename": asset_filename,
+            "output_url": output_url,
+            "file_size": len(response.content)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error downloading/storing asset: {e}")
+        raise
+
+def generate_trend_aware_prompt(base_prompt: str, ad_type: str, campaign_goal: str) -> str:
+    """
+    Generate trend-aware prompts incorporating current trends
+    """
+    # Current trends for 2026
+    current_trends = [
         "AI-generated unique aesthetics",
         "Fluid morphing animations",
         "Glassmorphism 2.0 with depth",
@@ -54,970 +355,512 @@ RECENT_TRENDS = {
         "Sustainable design patterns",
         "Adaptive responsive layouts",
         "Kinetic typography systems",
-        "Neural network inspired patterns",
-        "Biophilic design integration",
-        "Quantum computing aesthetics"
-    ],
-    "marketing_trends_2026": [
-        "Predictive personalization",
-        "Conversational commerce",
-        "Social commerce integration",
-        "Sustainable value propositions",
-        "Experience-based marketing",
-        "Privacy-first personalization",
-        "AI co-creation with customers",
-        "Immersive brand worlds",
-        "Micro-influencer networks",
-        "Purpose-driven campaigns"
-    ],
-    "technology_trends": [
-        "Generative AI everywhere",
-        "Web3 and decentralized branding",
-        "Spatial computing interfaces",
-        "Brain-computer interface concepts",
-        "Quantum computing visuals",
-        "Autonomous system aesthetics",
-        "Biotech-inspired designs",
-        "Climate tech visualization",
-        "Digital twin representation",
-        "Neuromorphic computing patterns"
+        "Neural network inspired patterns"
     ]
-}
-
-def get_mime_type_from_filename(filename):
-    """
-    Get MIME type from filename
-    """
-    file_extension = filename.lower().split('.')[-1]
-    mime_type_map = {
-        'png': 'image/png',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'webp': 'image/webp',
-        'gif': 'image/gif',
-        'bmp': 'image/bmp'
-    }
-    return mime_type_map.get(file_extension, 'image/png')
-
-def analyze_current_trends():
-    """
-    Analyze and return current trending styles and patterns for 2026
-    """
-    current_month = datetime.now().strftime("%B")
-    current_year = datetime.now().year
     
-    # Updated seasonal trends for 2026
-    seasonal_trends = {
-        "January": [
-            "New Year digital detox themes",
-            "AI-powered planning aesthetics",
-            "Minimalist reset designs",
-            "Future-forward goal setting",
-            "Sustainable new beginnings"
-        ],
-        "February": [
-            "Digital love expressions",
-            "Self-love technology integration",
-            "Inclusive celebration designs",
-            "AR Valentine experiences",
-            "Emotional AI interactions"
-        ],
-        "March": [
-            "AI spring renewal themes",
-            "Digital growth visualization",
-            "Biophilic tech interfaces",
-            "Renewable energy aesthetics",
-            "Smart living innovations"
-        ],
-        "April": [
-            "Climate action digital campaigns",
-            "Earth-conscious AI designs",
-            "Sustainable tech showcases",
-            "Digital conservation efforts",
-            "Green technology aesthetics"
-        ],
-        "May": [
-            "AI-assisted parenting tools",
-            "Digital graduation experiences",
-            "Smart home summer prep",
-            "Future workforce visuals",
-            "Tech-enhanced celebrations"
-        ],
-        "June": [
-            "Digital pride expressions",
-            "AI creativity showcases",
-            "Virtual summer experiences",
-            "Smart travel technology",
-            "Inclusive tech innovations"
-        ],
-        "July": [
-            "AI freedom concepts",
-            "Digital independence themes",
-            "Smart outdoor technology",
-            "Virtual beach experiences",
-            "Tech-powered celebrations"
-        ],
-        "August": [
-            "AI education tools",
-            "Digital back-to-school",
-            "Smart learning environments",
-            "Future skill development",
-            "Tech transition support"
-        ],
-        "September": [
-            "AI autumn aesthetics",
-            "Smart home cozy tech",
-            "Digital harvest concepts",
-            "Sustainable fall technology",
-            "Adaptive seasonal designs"
-        ],
-        "October": [
-            "AI-generated spooky content",
-            "Virtual reality Halloween",
-            "Smart home automation themes",
-            "Digital transformation concepts",
-            "Tech innovation celebrations"
-        ],
-        "November": [
-            "AI gratitude expressions",
-            "Smart shopping experiences",
-            "Digital connection themes",
-            "Future-forward thankfulness",
-            "Tech-enhanced celebrations"
-        ],
-        "December": [
-            "AI holiday personalization",
-            "Smart home festive automation",
-            "Virtual reality celebrations",
-            "Digital gift experiences",
-            "Tech-powered traditions"
-        ]
-    }
-    
-    # Get current technology adoption trends
-    tech_adoption = {
-        "ai_adoption_rate": "92% of businesses using AI tools",
-        "ar_vr_adoption": "65% growth in AR marketing",
-        "voice_search": "78% of searches voice-activated",
-        "smart_homes": "85% homes with smart devices",
-        "sustainable_tech": "70% consumers prefer eco-tech"
-    }
-    
-    return {
-        "seasonal": seasonal_trends.get(current_month, []),
-        "year": current_year,
-        "quarter": f"Q{(datetime.now().month - 1) // 3 + 1}",
-        "month": current_month,
-        "tech_adoption": tech_adoption,
-        "emerging_technologies": [
-            "Generative AI Design Tools",
-            "Spatial Computing Interfaces",
-            "Neural Interface Concepts",
-            "Quantum Computing Visuals",
-            "Autonomous System Designs"
-        ]
-    }
-
-def fetch_industry_trends(industry_keywords):
-    """
-    Fetch industry-specific trends for 2026
-    """
-    industry_trend_map = {
-        "fashion": [
-            "AI-designed sustainable fashion",
-            "Digital clothing NFTs",
-            "Smart fabric technology",
-            "Virtual fitting rooms",
-            "Circular fashion economy"
-        ],
-        "tech": [
-            "AI-first product design",
-            "Quantum computing interfaces",
-            "Neural network aesthetics",
-            "Spatial web experiences",
-            "Autonomous system UIs"
-        ],
-        "food": [
-            "AI recipe generation",
-            "Smart kitchen technology",
-            "Sustainable food systems",
-            "Personalized nutrition AI",
-            "Vertical farming aesthetics"
-        ],
-        "fitness": [
-            "AI personal trainers",
-            "Smart home gyms",
-            "Biometric tracking design",
-            "Virtual reality workouts",
-            "Neural feedback training"
-        ],
-        "beauty": [
-            "AI skincare analysis",
-            "Virtual makeup try-ons",
-            "Sustainable beauty tech",
-            "Personalized AI routines",
-            "Smart beauty devices"
-        ],
-        "automotive": [
-            "Autonomous vehicle interfaces",
-            "EV charging aesthetics",
-            "Smart mobility solutions",
-            "Connected car experiences",
-            "Sustainable transportation"
-        ],
-        "realestate": [
-            "Virtual property tours",
-            "Smart home automation",
-            "Sustainable building tech",
-            "AI property management",
-            "Digital neighborhood experiences"
-        ],
-        "education": [
-            "AI personalized learning",
-            "Virtual classrooms",
-            "Immersive educational content",
-            "Smart campus technology",
-            "Future skill development"
-        ],
-        "healthcare": [
-            "AI diagnostics interfaces",
-            "Telemedicine experiences",
-            "Wearable health tech",
-            "Personalized medicine AI",
-            "Virtual health assistants"
-        ],
-        "finance": [
-            "AI financial advisors",
-            "Blockchain interfaces",
-            "Smart banking experiences",
-            "Cryptocurrency aesthetics",
-            "Personalized finance tools"
-        ]
-    }
-    
-    trends = []
-    for keyword in industry_keywords:
-        if keyword.lower() in industry_trend_map:
-            trends.extend(industry_trend_map[keyword.lower()])
-        else:
-            # Add general AI trends for unspecified industries
-            trends.extend([
-                f"AI-powered {keyword} solutions",
-                f"Smart {keyword} technology",
-                f"Digital {keyword} transformation",
-                f"Sustainable {keyword} innovation",
-                f"Personalized {keyword} experiences"
-            ])
-    
-    return list(dict.fromkeys(trends))[:8]  # Return top 8 unique trends
-
-def generate_trend_aware_prompt(base_prompt, ad_type, campaign_goal, industry_context=None):
-    """
-    Generate trend-aware prompts for 2026 incorporating current trends
-    """
-    # Get current trends
-    current_trends = analyze_current_trends()
-    
-    # Get industry-specific trends
-    industry_trends = []
-    if industry_context and isinstance(industry_context, list):
-        industry_trends = fetch_industry_trends(industry_context)
-    
-    # Combine all trends
-    all_trends = []
-    
-    # Add core 2026 trends
-    all_trends.extend(RECENT_TRENDS.get("2026_q1", []))
-    all_trends.extend(RECENT_TRENDS.get("social_media_trends_2026", []))
-    all_trends.extend(RECENT_TRENDS.get("design_trends_2026", []))
-    all_trends.extend(RECENT_TRENDS.get("marketing_trends_2026", []))
-    all_trends.extend(RECENT_TRENDS.get("technology_trends", []))
-    
-    # Add current seasonal trends
-    all_trends.extend(current_trends.get("seasonal", []))
-    
-    # Add industry trends
-    all_trends.extend(industry_trends)
-    
-    # Add emerging technologies
-    all_trends.extend(current_trends.get("emerging_technologies", []))
-    
-    # Remove duplicates and get unique trends
-    unique_trends = list(dict.fromkeys(all_trends))
-    
-    # Select relevant trends based on ad type and goal
-    selected_trends = []
-    
-    # Always include AI and tech trends for 2026
-    selected_trends.extend([
-        "AI-generated content",
-        "Modern digital aesthetics",
-        "2026 design standards"
-    ])
-    
-    # Add 3-5 random but relevant trends
+    # Select relevant trends
     import random
-    if len(unique_trends) >= 5:
-        selected_trends.extend(random.sample(unique_trends, min(5, len(unique_trends))))
+    selected_trends = random.sample(current_trends, min(3, len(current_trends)))
     
-    # Add trends based on ad type
-    ad_type_map = {
-        "social": ["mobile-first AI optimization", "thumb-stopping AI content", "social commerce integration"],
-        "instagram": ["AR filter compatibility", "stories-optimized design", "influencer-ready aesthetics"],
-        "facebook": ["newsfeed-optimized", "community-focused design", "conversation-starting visuals"],
-        "tiktok": ["vertical video format", "trending audio integration", "duet-friendly composition"],
-        "youtube": ["premium quality visuals", "watch-time optimized", "end-screen ready design"],
-        "display": ["responsive AI design", "attention-grabbing CTAs", "brand consistency with innovation"],
-        "banner": ["high-impact minimal design", "clear value proposition", "conversion-focused layout"],
-        "video": ["AI-generated motion", "dynamic transitions", "immersive storytelling"],
-        "email": ["responsive design", "personalization-ready", "clear value hierarchy"],
-        "website": ["AI-optimized UX", "fast loading design", "conversion-focused layout"]
-    }
-    
-    selected_trends.extend(ad_type_map.get(ad_type.lower(), ["modern digital marketing", "high-performance design"]))
-    
-    # Add trends based on campaign goal
-    goal_trend_map = {
-        'awareness': [
-            "brand storytelling with AI",
-            "emotional connection through tech",
-            "viral potential optimization",
-            "memorable digital experience"
-        ],
-        'consideration': [
-            "AI-powered comparison tools",
-            "detailed feature visualization",
-            "social proof integration",
-            "trust-building design"
-        ],
-        'conversions': [
-            "AI-optimized CTAs",
-            "personalized offers",
-            "frictionless user journey",
-            "urgency through design"
-        ],
-        'retention': [
-            "AI loyalty personalization",
-            "community building features",
-            "exclusive content design",
-            "re-engagement optimization"
-        ],
-        'lead': [
-            "AI-powered value exchange",
-            "trust signal integration",
-            "simplified data collection",
-            "personalized follow-up ready"
-        ]
-    }
-    
-    selected_trends.extend(goal_trend_map.get(campaign_goal, ["professional AI marketing", "result-oriented design"]))
-    
-    # Create trend string for prompt
-    trend_string = ", ".join(list(dict.fromkeys(selected_trends))[:7])  # Use top 7 unique trends
-    
-    # Build the final 2026-optimized prompt
-    prompt = f"@product in {ad_type}, {base_prompt}"
-    prompt += f", incorporating 2026 trends: {trend_string}"
-    prompt += f", {current_trends['year']} AI-powered marketing"
-    prompt += f", {current_trends['month']} seasonal relevance"
-    prompt += f", modern tech-forward design"
-    prompt += f", high-conversion AI-optimized visual"
-    prompt += f", professional commercial advertisement"
-    
-    # Add quality and style parameters
+    # Build the final prompt
+    prompt = f"@product {base_prompt}"
+    prompt += f", incorporating trends: {', '.join(selected_trends)}"
+    prompt += f", 2026 design aesthetics"
+    prompt += f", professional {ad_type} advertisement"
     prompt += f", ultra-detailed, photorealistic, 8K resolution"
     prompt += f", professional lighting, perfect composition"
     
     return prompt
 
-def generate_image_with_runway(image_data_base64, prompt_text, filename='image.png'):
+def generate_video_prompt(ad_type: str, campaign_goal: str, variation_number: int) -> str:
     """
-    Generate image using Runway ML Text-to-Image API with reference image
+    Generate specific video prompts based on variation number
     """
-    try:
-        if not client:
-            raise Exception("Runway client not initialized. Please set RUNWAY_API_KEY")
+    video_prompts = [
+        f"""Create a cinematic advertisement-style video.
+Campaign goal: {campaign_goal}.
+Product type: {ad_type}.
+Preserve the product identity and enhance lighting, background, and motion.
+Follow modern advertising trends with smooth animations.
+Cinematic quality, professional lighting, slow motion effects.""",
         
-        # Get MIME type from filename
-        mime_type = get_mime_type_from_filename(filename)
-        
-        # Create data URI from base64 data
-        data_uri = f"data:{mime_type};base64,{image_data_base64}"
-        
-        print(f"[Runway] Creating generation task with prompt: {prompt_text[:100]}...")
-        
-        # Based on the error message, we need to use 'prompt_text'
-        task = client.text_to_image.create(
-            model='gen4_image_turbo',
-            prompt_text=prompt_text,  # REQUIRED parameter
-            ratio='1080:1080',        # REQUIRED parameter
-            reference_images=[         # REQUIRED for image reference
-                {
-                    'uri': data_uri,
-                    'tag': 'product',
-                }
-            ]
-        )
-        
-        print(f"[Runway] Task created with ID: {task.id}, waiting for completion...")
-        
-        # Wait for the task to complete
-        result = task.wait_for_task_output()
-        
-        print(f"[Runway] ✓ Task completed successfully!")
-        
-        # Extract the generated image URL
-        if result and hasattr(result, 'output') and result.output:
-            # Output is a list of URLs
-            image_url = result.output[0] if isinstance(result.output, list) else result.output
-            return {
-                'success': True,
-                'image_url': image_url,
-                'task_id': task.id
-            }
-        else:
-            print(f"[Runway] ✗ No output in result: {result}")
-            return None
-            
-    except TaskFailedError as e:
-        print(f"[Runway] ✗ Task failed: {e.task_details}")
-        return None
-    except Exception as e:
-        print(f"[Runway] ✗ Error generating image: {str(e)}")
-        traceback.print_exc()
-        return None
-
-def generate_ai_trend_insights(campaign_goal, industry_context):
-    """
-    Generate AI-powered insights about trends for this campaign
-    """
-    insights = {
-        "predicted_trend_lifespan": "6-9 months",
-        "adoption_curve": "Early Majority",
-        "competitor_activity": "High",
-        "consumer_sentiment": "Positive",
-        "innovation_score": "8.5/10"
-    }
+        f"""Generate an engaging promotional video.
+Campaign goal: {campaign_goal}.
+Product type: {ad_type}.
+Focus on product showcase with dynamic camera movements.
+Include subtle motion effects and professional transitions.
+Modern advertising style with attention-grabbing visuals."""
+    ]
     
-    # Industry-specific insights
-    if industry_context:
-        insights["industry_trend_maturity"] = "Emerging" if any(x in ["ai", "tech", "software"] for x in industry_context) else "Maturing"
-        insights["market_readiness"] = "Ready" if len(industry_context) > 1 else "Developing"
-    
-    return insights
+    # Return the appropriate prompt based on variation number
+    index = (variation_number - 1) % len(video_prompts)
+    return video_prompts[index]
 
-@creative_assets_bp.route('/api/upload-image', methods=['POST'])
+# -----------------------------
+# API Routes
+# -----------------------------
+
+@creative_assets_bp.route('/api/upload-image', methods=['POST', 'OPTIONS'])
 def upload_image():
-    """
-    Handle image upload and store for later generation
-    """
+    """Upload product image and create campaign"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     try:
-        data = request.json
-        user_id = data.get('user_id')
-        image_data = data.get('image_data')  # base64 encoded
-        filename = data.get('filename', 'uploaded_image.png')
-        campaign_id = data.get('campaign_id')
-        ad_type = data.get('ad_type', '')
-        industry_context = data.get('industry_context', [])
+        data = request.get_json()
         
-        if not user_id or not image_data:
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        # Validate required fields
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
         
-        # Generate campaign ID if not provided
-        if not campaign_id:
-            campaign_id = f"campaign_{uuid.uuid4().hex[:8]}"
+        required_fields = ['image_data', 'filename', 'ad_type']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"success": False, "error": f"Missing required field: {field}"}), 400
         
-        # Store the upload information
-        if user_id not in user_uploads:
-            user_uploads[user_id] = {}
+        user_id = data.get('user_id', 'demo_user')
+        image_data = data['image_data']
+        filename = data['filename']
+        ad_type = data['ad_type']
+        campaign_id = data.get('campaign_id', f"campaign_{str(uuid.uuid4())[:8]}")
         
-        user_uploads[user_id][campaign_id] = {
-            'image_data': image_data,
-            'filename': filename,
-            'ad_type': ad_type,
-            'industry_context': industry_context,
-            'uploaded_at': datetime.now().isoformat(),
-            'trend_snapshot': analyze_current_trends()
+        # Convert to proper data URI format
+        image_data_uri = get_image_as_data_uri(image_data, filename)
+        
+        logger.info(f"Uploading image for campaign: {campaign_id}, user: {user_id}")
+        logger.info(f"Data URI format: {image_data_uri[:100]}...")
+        
+        # Save image locally
+        filepath = save_image_locally(image_data, filename)
+        
+        if not filepath:
+            return jsonify({"success": False, "error": "Failed to save image"}), 500
+        
+        # Store in tasks store
+        tasks_store[campaign_id] = {
+            "user_id": user_id,
+            "filename": filename,
+            "filepath": filepath,
+            "image_data": image_data_uri,  # Store as data URI
+            "ad_type": ad_type,
+            "created_at": time.time(),
+            "status": "uploaded",
+            "generated_assets": []  # Store all generated assets here
         }
         
-        # Create campaign entry
-        if campaign_id not in campaigns:
-            campaigns[campaign_id] = {
-                'user_id': user_id,
-                'created_at': datetime.now().isoformat(),
-                'assets': [],
-                'trend_insights': generate_ai_trend_insights('awareness', industry_context)
-            }
+        # Initialize generation tasks for this campaign
+        generation_tasks[campaign_id] = []
         
-        print(f"[Upload] ✓ Image uploaded for campaign {campaign_id}")
-        print(f"[Upload] Industry context: {industry_context}")
-        print(f"[Upload] Trend snapshot captured")
+        logger.info(f"Image uploaded successfully for campaign: {campaign_id}")
         
         return jsonify({
-            'success': True,
-            'campaign_id': campaign_id,
-            'message': 'Image uploaded successfully',
-            'trend_context': analyze_current_trends()
-        })
+            "success": True,
+            "message": "Image uploaded successfully",
+            "campaign_id": campaign_id,
+            "user_id": user_id,
+            "ad_type": ad_type,
+            "image_format": "data_uri"
+        }), 200
         
     except Exception as e:
-        print(f"[Upload] ✗ Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error uploading image: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@creative_assets_bp.route('/api/generate-assets', methods=['POST'])
+@creative_assets_bp.route('/api/generate-assets', methods=['POST', 'OPTIONS'])
 def generate_assets():
-    """
-    Generate images using Runway ML when both image and text are provided
-    """
+    """Generate multiple AI assets (images or videos)"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     try:
-        data = request.json
-        user_id = data.get('user_id')
-        campaign_id = data.get('campaign_id')
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        required_fields = ['campaign_id', 'asset_type']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"success": False, "error": f"Missing required field: {field}"}), 400
+        
+        campaign_id = data['campaign_id']
+        asset_type = data['asset_type']  # 'image' or 'video'
+        user_id = data.get('user_id', 'demo_user')
         campaign_goal = data.get('campaign_goal', 'awareness')
-        ad_type = data.get('ad_type', '')
-        additional_context = data.get('additional_context', '')
-        target_audience = data.get('target_audience', '')
+        ad_type = data.get('ad_type', 'General Ads')
         
-        if not user_id or not campaign_id:
-            return jsonify({'success': False, 'error': 'Missing user_id or campaign_id'}), 400
+        # Check if campaign exists
+        if campaign_id not in tasks_store:
+            return jsonify({"success": False, "error": "Campaign not found. Please upload image first."}), 404
         
-        # Check if we have the uploaded image
-        if user_id not in user_uploads or campaign_id not in user_uploads[user_id]:
-            return jsonify({'success': False, 'error': 'No uploaded image found'}), 400
+        campaign = tasks_store[campaign_id]
+        image_data_uri = campaign['image_data']
         
-        upload_info = user_uploads[user_id][campaign_id]
-        image_data = upload_info['image_data']
-        filename = upload_info['filename']
-        industry_context = upload_info.get('industry_context', [])
+        # Validate asset type
+        if asset_type not in ['image', 'video']:
+            return jsonify({"success": False, "error": "Invalid asset type. Must be 'image' or 'video'"}), 400
         
-        # If ad_type is provided in this request, use it; otherwise use stored one
-        if ad_type:
-            upload_info['ad_type'] = ad_type
-        else:
-            ad_type = upload_info.get('ad_type', '')
+        logger.info(f"Starting {asset_type} generation for campaign: {campaign_id}, ad_type: {ad_type}")
         
-        # Check if ad_type is provided
-        if not ad_type:
-            return jsonify({
-                'success': False, 
-                'error': 'Please provide the type of ads you want to generate'
-            }), 400
+        # Generate ONLY 2 variations (as requested)
+        num_variations = 2
         
-        # Get current trends for 2026
-        current_trends = analyze_current_trends()
+        # Check if assets already generated
+        if 'generated_assets' in campaign:
+            # Count existing assets of this type
+            existing_count = len([a for a in campaign['generated_assets'] if a.get('type') == asset_type])
+            if existing_count >= num_variations:
+                return jsonify({
+                    "success": True,
+                    "message": f"Already generated {existing_count} {asset_type} assets",
+                    "task_ids": [],
+                    "campaign_id": campaign_id,
+                    "asset_type": asset_type,
+                    "variations": existing_count,
+                    "note": "Use GET /api/get-generated-assets to retrieve existing assets"
+                }), 200
         
-        print("=" * 60)
-        print(f"[Generation] 🎨 Starting image generation for campaign: {campaign_id}")
-        print(f"[Generation] 📝 Ad Type: {ad_type}")
-        print(f"[Generation] 🎯 Goal: {campaign_goal}")
-        print(f"[Generation] 🏢 Industry: {industry_context}")
-        print(f"[Generation] 🎯 Target: {target_audience}")
-        print(f"[Generation] 📅 Year: {current_trends['year']}")
-        print("=" * 60)
+        task_ids = []
         
-        # Generate trend insights
-        trend_insights = generate_ai_trend_insights(campaign_goal, industry_context)
-        
-        # Create prompt based on campaign goal
-        goal_prompts = {
-            'awareness': 'AI-powered brand awareness advertisement for 2026',
-            'consideration': 'engaging product showcase with AI personalization',
-            'conversions': 'high-conversion AI-optimized advertisement',
-            'retention': 'loyalty-building customer retention with AI',
-            'lead': 'professional lead generation with AI assistance'
-        }
-        
-        base_prompt = goal_prompts.get(campaign_goal, 'professional AI-powered product advertisement')
-        
-        # Add context
-        if target_audience:
-            base_prompt += f" targeting {target_audience}"
-        if additional_context:
-            base_prompt += f", {additional_context}"
-        
-        # Generate 6 variations with different trend combinations
-        prompts = []
-        
-        # Variation 1: AI & Technology focus
-        prompt1 = generate_trend_aware_prompt(
-            base_prompt + ", focus on AI innovation and technology integration",
-            ad_type,
-            campaign_goal,
-            industry_context
-        )
-        prompts.append(prompt1)
-        
-        # Variation 2: Sustainability & Future focus
-        prompt2 = generate_trend_aware_prompt(
-            base_prompt + ", emphasizing sustainability and future-forward design",
-            ad_type,
-            campaign_goal,
-            industry_context
-        )
-        prompts.append(prompt2)
-        
-        # Variation 3: Personalization & Experience
-        prompt3 = generate_trend_aware_prompt(
-            base_prompt + ", focusing on personalized digital experiences",
-            ad_type,
-            campaign_goal,
-            industry_context
-        )
-        prompts.append(prompt3)
-        
-        # Variation 4: Social Media & Virality
-        prompt4 = generate_trend_aware_prompt(
-            base_prompt + ", optimized for social media virality and engagement",
-            ad_type,
-            campaign_goal,
-            industry_context
-        )
-        prompts.append(prompt4)
-        
-        # Variation 5: Premium & Luxury
-        prompt5 = generate_trend_aware_prompt(
-            base_prompt + ", premium luxury aesthetic with tech integration",
-            ad_type,
-            campaign_goal,
-            industry_context
-        )
-        prompts.append(prompt5)
-        
-        # Variation 6: Minimalist & Clean
-        prompt6 = generate_trend_aware_prompt(
-            base_prompt + ", minimalist clean design with smart technology",
-            ad_type,
-            campaign_goal,
-            industry_context
-        )
-        prompts.append(prompt6)
-        
-        generated_assets = []
-        
-        # Generate images with Runway
-        print(f"[Generation] 🚀 Generating {len(prompts)} trend-aware image variations...")
-        print(f"[Generation] 📊 Current trends applied: {current_trends}")
-        print(f"[Generation] 🤖 AI Trend Insights: {trend_insights}")
-        
-        for idx, prompt in enumerate(prompts):
-            print(f"\n[Generation] [{idx + 1}/{len(prompts)}] Generating trend-aware variation...")
-            print(f"[Generation]    Trend context: {prompt[:120]}...")
-            
-            result = generate_image_with_runway(image_data, prompt, filename)
-            
-            if result and result.get('success'):
-                # Calculate trend relevance score
-                trend_score = 85 + (idx * 2)
-                
-                # Define variation themes
-                variation_themes = [
-                    "AI Technology Focus",
-                    "Sustainability & Future",
-                    "Personalized Experience",
-                    "Social Media Optimized",
-                    "Premium Luxury",
-                    "Minimalist Smart Design"
-                ]
-                
-                generated_assets.append({
-                    'id': idx + 1,
-                    'title': f'{ad_type} - {variation_themes[idx] if idx < len(variation_themes) else f"Variation {idx + 1}"}',
-                    'image_url': result['image_url'],
-                    'prompt': prompt,
-                    'score': trend_score,
-                    'type': 'AI Generated 2026',
-                    'task_id': result['task_id'],
-                    'trend_tags': [
-                        f"2026",
-                        current_trends['month'].lower(),
-                        f"q{current_trends['quarter']}",
+        for i in range(num_variations):
+            try:
+                if asset_type == 'image':
+                    # Generate trend-aware prompt for images
+                    base_prompt = f"Create a professional advertisement background for {ad_type}. Campaign goal: {campaign_goal}. Use modern, clean design with the product placed naturally."
+                    prompt_text = generate_trend_aware_prompt(
+                        base_prompt,
+                        ad_type,
+                        campaign_goal
+                    )
+                    
+                    task_id = create_image_generation_task(
+                        image_data_uri,
+                        prompt_text,
+                        i + 1
+                    )
+                else:  # video
+                    # Generate specific video prompt
+                    prompt_text = generate_video_prompt(
+                        ad_type,
                         campaign_goal,
-                        ad_type.lower(),
-                        variation_themes[idx].lower().replace(' ', '-') if idx < len(variation_themes) else 'ai-generated'
-                    ] + [ic.lower() for ic in industry_context[:2]],
-                    'ai_insights': {
-                        'predicted_engagement': f"{trend_score}%",
-                        'innovation_level': 'High' if idx < 3 else 'Medium-High',
-                        'market_fit': 'Strong' if trend_score > 88 else 'Good'
-                    }
-                })
-                print(f"[Generation]    ✓ Success! Trend Score: {trend_score}")
-                print(f"[Generation]    Theme: {variation_themes[idx] if idx < len(variation_themes) else 'AI Generated'}")
-            else:
-                print(f"[Generation]    ✗ Failed to generate variation {idx + 1}")
+                        i + 1
+                    )
+                    
+                    task_id = create_video_generation_task(
+                        image_data_uri,
+                        prompt_text,
+                        i + 1
+                    )
+                
+                # Store task info
+                task_info = {
+                    "task_id": task_id,
+                    "campaign_id": campaign_id,
+                    "user_id": user_id,
+                    "asset_type": asset_type,
+                    "ad_type": ad_type,
+                    "campaign_goal": campaign_goal,
+                    "status": "processing",
+                    "variation": i + 1,
+                    "started_at": time.time(),
+                    "prompt": prompt_text
+                }
+                
+                # Store in generation tasks
+                if campaign_id not in generation_tasks:
+                    generation_tasks[campaign_id] = []
+                generation_tasks[campaign_id].append(task_info)
+                
+                task_ids.append(task_id)
+                logger.info(f"Created {asset_type} generation task {i+1}: {task_id}")
+                
+                # Add small delay between task creation
+                if i < num_variations - 1:
+                    time.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"Failed to create variation {i+1}: {e}")
+                # Continue with other variations even if one fails
         
-        if len(generated_assets) == 0:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to generate any images. Please check your Runway API key and credits.'
-            }), 500
+        if not task_ids:
+            return jsonify({"success": False, "error": "Failed to create any generation tasks"}), 500
         
-        # Store generated assets
-        if campaign_id in campaigns:
-            campaigns[campaign_id]['assets'] = generated_assets
-            campaigns[campaign_id]['trend_metadata'] = {
-                'generated_at': datetime.now().isoformat(),
-                'trends_applied': current_trends,
-                'industry_context': industry_context,
-                'campaign_goal': campaign_goal,
-                'ai_insights': trend_insights,
-                'tech_adoption': current_trends.get('tech_adoption', {})
-            }
+        # Update campaign status
+        campaign['status'] = f'generating_{asset_type}'
+        tasks_store[campaign_id] = campaign
         
-        print("\n" + "=" * 60)
-        print(f"[Generation] ✅ Successfully generated {len(generated_assets)} trend-aware images!")
-        print(f"[Generation] 📈 Trends applied: {len(current_trends.get('seasonal', []))} seasonal trends")
-        print(f"[Generation] 🎯 Industry trends: {len(industry_context)} contexts")
-        print(f"[Generation] 🤖 AI Insights generated: {len(trend_insights)} metrics")
-        print("=" * 60)
-        
-        return jsonify({
-            'success': True,
-            'assets': generated_assets,
-            'campaign_id': campaign_id,
-            'trend_metadata': {
-                'season': current_trends['month'],
-                'quarter': current_trends['quarter'],
-                'year': current_trends['year'],
-                'industry_trends': industry_context,
-                'ai_insights': trend_insights,
-                'tech_adoption_stats': current_trends.get('tech_adoption', {})
-            },
-            'message': f'Successfully generated {len(generated_assets)} AI-powered images for 2026'
-        })
-        
-    except Exception as e:
-        print(f"\n[Generation] ✗ Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@creative_assets_bp.route('/api/save-selected-assets', methods=['POST'])
-def save_selected_assets():
-    """
-    Save selected assets to the campaign
-    """
-    try:
-        data = request.json
-        user_id = data.get('user_id')
-        campaign_id = data.get('campaign_id')
-        selected_assets = data.get('selected_assets', [])
-        performance_notes = data.get('performance_notes', '')
-        
-        if not user_id or not campaign_id:
-            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
-        
-        if campaign_id not in campaigns:
-            return jsonify({'success': False, 'error': 'Campaign not found'}), 404
-        
-        # Update campaign with selected assets
-        campaigns[campaign_id]['selected_assets'] = selected_assets
-        campaigns[campaign_id]['updated_at'] = datetime.now().isoformat()
-        
-        # Store performance notes
-        if performance_notes:
-            campaigns[campaign_id]['performance_notes'] = performance_notes
-        
-        # Analyze successful trends
-        selected_trends = set()
-        ai_insights = {
-            'total_selected': len(selected_assets),
-            'average_score': 0,
-            'top_trends': []
-        }
-        
-        total_score = 0
-        for asset in selected_assets:
-            if isinstance(asset, dict):
-                if 'trend_tags' in asset:
-                    selected_trends.update(asset['trend_tags'])
-                if 'score' in asset:
-                    total_score += asset['score']
-                if 'ai_insights' in asset:
-                    # Collect AI insights
-                    pass
-        
-        if selected_assets:
-            ai_insights['average_score'] = total_score / len(selected_assets)
-        
-        ai_insights['top_trends'] = list(selected_trends)[:8]
-        campaigns[campaign_id]['successful_trends'] = list(selected_trends)
-        campaigns[campaign_id]['selection_insights'] = ai_insights
-        
-        print(f"[Save] ✓ Saved {len(selected_assets)} selected assets for campaign {campaign_id}")
-        print(f"[Save] 📊 Average score: {ai_insights['average_score']:.1f}")
-        print(f"[Save] 🎯 Top trends: {ai_insights['top_trends'][:3]}...")
+        logger.info(f"Started {len(task_ids)} {asset_type} generation tasks for campaign: {campaign_id}")
         
         return jsonify({
-            'success': True,
-            'message': f'{len(selected_assets)} assets saved successfully',
-            'selection_insights': ai_insights,
-            'successful_trends': list(selected_trends)[:10]
-        })
+            "success": True,
+            "message": f"Started {len(task_ids)} {asset_type} generation tasks",
+            "task_ids": task_ids,
+            "campaign_id": campaign_id,
+            "asset_type": asset_type,
+            "variations": len(task_ids),  # Actual number of tasks created
+            "estimated_time": "2-5 minutes per video" if asset_type == 'video' else "1-3 minutes per image",
+            "note": f"Generating {len(task_ids)} {asset_type}s only. They will appear one at a time as they're generated."
+        }), 200
         
     except Exception as e:
-        print(f"[Save] ✗ Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error generating assets: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@creative_assets_bp.route('/api/create-campaign', methods=['POST'])
-def create_campaign():
-    """
-    Create a new campaign with trend context
-    """
+@creative_assets_bp.route('/api/check-status/<task_id>', methods=['GET', 'OPTIONS'])
+def check_status(task_id: str):
+    """Check status of a generation task and return asset if completed"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     try:
-        data = request.json
-        user_id = data.get('user_id')
-        campaign_goal = data.get('campaign_goal', 'awareness')
-        industry_context = data.get('industry_context', [])
-        target_audience = data.get('target_audience', '')
-        market_segment = data.get('market_segment', '')
+        logger.info(f"Checking status for task: {task_id}")
         
-        if not user_id:
-            return jsonify({'success': False, 'error': 'Missing user_id'}), 400
+        # Find the task in generation_tasks
+        task_info = None
+        campaign_id = None
         
-        campaign_id = f"campaign_{uuid.uuid4().hex[:8]}"
+        for cid, tasks in generation_tasks.items():
+            for task in tasks:
+                if task.get("task_id") == task_id:
+                    task_info = task
+                    campaign_id = cid
+                    break
+            if task_info:
+                break
         
-        # Get current trends and insights
-        current_trends = analyze_current_trends()
-        trend_insights = generate_ai_trend_insights(campaign_goal, industry_context)
+        if not task_info or not campaign_id:
+            logger.error(f"Task {task_id} not found in generation tasks")
+            return jsonify({"success": False, "error": f"Task {task_id} not found"}), 404
         
-        campaigns[campaign_id] = {
-            'user_id': user_id,
-            'campaign_goal': campaign_goal,
-            'industry_context': industry_context,
-            'target_audience': target_audience,
-            'market_segment': market_segment,
-            'created_at': datetime.now().isoformat(),
-            'trend_snapshot': current_trends,
-            'trend_insights': trend_insights,
-            'year': 2026,
-            'assets': []
-        }
+        # Check if task is already completed in campaign
+        campaign = tasks_store.get(campaign_id, {})
+        generated_assets = campaign.get('generated_assets', [])
         
-        print(f"[Campaign] ✓ Created new campaign: {campaign_id}")
-        print(f"[Campaign] 📊 Trend snapshot: {current_trends['month']} {current_trends['year']}")
-        print(f"[Campaign] 🤖 AI Insights: {trend_insights}")
+        for asset in generated_assets:
+            if asset.get('task_id') == task_id:
+                # Task already completed and stored
+                logger.info(f"Task {task_id} already completed, returning stored asset")
+                return jsonify({
+                    "success": True,
+                    "status": "completed",
+                    "asset_type": task_info.get('asset_type'),
+                    "task_id": task_id,
+                    "asset": {
+                        "id": asset.get('id'),
+                        "data_uri": asset.get('data_uri'),
+                        "filename": asset.get('filename'),
+                        "type": asset.get('type'),
+                        "file_size": asset.get('file_size')
+                    },
+                    "variation": task_info.get('variation'),
+                    "message": f"{task_info.get('asset_type').capitalize()} generation completed"
+                }), 200
         
-        return jsonify({
-            'success': True,
-            'campaign_id': campaign_id,
-            'trend_context': {
-                'year': 2026,
-                'season': current_trends['month'],
-                'quarter': current_trends['quarter'],
-                'insights': trend_insights,
-                'tech_adoption': current_trends.get('tech_adoption', {})
-            }
-        })
+        # Poll Runway for status
+        logger.info(f"Polling Runway for task status: {task_id}")
+        result = poll_task_status(task_id)
         
-    except Exception as e:
-        print(f"[Campaign] ✗ Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@creative_assets_bp.route('/api/get-campaign/<campaign_id>', methods=['GET'])
-def get_campaign(campaign_id):
-    """
-    Get campaign details and assets
-    """
-    try:
-        if campaign_id not in campaigns:
-            return jsonify({'success': False, 'error': 'Campaign not found'}), 404
-        
-        campaign_data = campaigns[campaign_id]
-        
-        # Add trend analysis if not present
-        if 'trend_insights' not in campaign_data:
-            campaign_data['trend_insights'] = generate_ai_trend_insights(
-                campaign_data.get('campaign_goal', 'awareness'),
-                campaign_data.get('industry_context', [])
-            )
-        
-        return jsonify({
-            'success': True,
-            'campaign': campaign_data,
-            'current_year': 2026,
-            'trend_database_version': '2026.1'
-        })
-        
-    except Exception as e:
-        print(f"[Get Campaign] ✗ Error: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@creative_assets_bp.route('/api/get-current-trends', methods=['GET'])
-def get_current_trends():
-    """
-    Get current marketing and design trends for 2026
-    """
-    try:
-        current_trends = analyze_current_trends()
-        
-        return jsonify({
-            'success': True,
-            'year': 2026,
-            'trends': {
-                'seasonal': current_trends['seasonal'],
-                'quarter': current_trends['quarter'],
-                'month': current_trends['month'],
-                'year': current_trends['year'],
-                'design_trends': RECENT_TRENDS['design_trends_2026'],
-                'social_media_trends': RECENT_TRENDS['social_media_trends_2026'],
-                'marketing_trends': RECENT_TRENDS['marketing_trends_2026'],
-                'technology_trends': RECENT_TRENDS['technology_trends'],
-                'emerging_technologies': current_trends.get('emerging_technologies', []),
-                'tech_adoption': current_trends.get('tech_adoption', {})
-            },
-            'updated_at': datetime.now().isoformat(),
-            'database_version': '2026.1'
-        })
-        
-    except Exception as e:
-        print(f"[Trends] ✗ Error: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@creative_assets_bp.route('/api/update-trends', methods=['POST'])
-def update_trends():
-    """
-    Update trend database (admin endpoint)
-    """
-    try:
-        data = request.json
-        new_trends = data.get('trends', {})
-        
-        # Update trends
-        if new_trends:
-            RECENT_TRENDS.update(new_trends)
+        if result['success']:
+            # Task completed successfully
+            asset_type = task_info.get('asset_type', 'image')
             
+            try:
+                # Download and store the asset
+                asset_data = download_and_store_asset(
+                    result['output_url'],
+                    task_id,
+                    asset_type,
+                    campaign_id
+                )
+                
+                # Create asset info
+                asset_id = str(uuid.uuid4())
+                asset_info = {
+                    "id": asset_id,
+                    "task_id": task_id,
+                    "campaign_id": campaign_id,
+                    "type": asset_type,
+                    "data_uri": asset_data['data_uri'],
+                    "filename": asset_data['filename'],
+                    "local_path": asset_data['local_path'],
+                    "output_url": asset_data['output_url'],
+                    "file_size": asset_data.get('file_size'),
+                    "title": f"AI Generated {asset_type.capitalize()} {task_info.get('variation', 1)}",
+                    "prompt": task_info.get('prompt', ''),
+                    "score": 80 + (task_info.get('variation', 1) * 5),  # Score based on variation
+                    "created_at": time.time(),
+                    "status": "completed"
+                }
+                
+                # Update task info
+                task_info['status'] = 'completed'
+                task_info['completed_at'] = time.time()
+                task_info['asset_info'] = asset_info
+                
+                # Store in campaign's generated assets
+                if 'generated_assets' not in campaign:
+                    campaign['generated_assets'] = []
+                campaign['generated_assets'].append(asset_info)
+                tasks_store[campaign_id] = campaign
+                
+                logger.info(f"Task {task_id} completed and stored successfully")
+                
+                return jsonify({
+                    "success": True,
+                    "status": "completed",
+                    "asset_type": asset_type,
+                    "task_id": task_id,
+                    "asset": {
+                        "id": asset_id,
+                        "data_uri": asset_data['data_uri'],
+                        "filename": asset_data['filename'],
+                        "type": asset_type,
+                        "file_size": asset_data.get('file_size')
+                    },
+                    "variation": task_info.get('variation'),
+                    "message": f"{asset_type.capitalize()} generation completed successfully"
+                }), 200
+                
+            except Exception as e:
+                logger.error(f"Error processing completed task {task_id}: {e}")
+                task_info['status'] = 'failed'
+                task_info['error'] = str(e)
+                
+                return jsonify({
+                    "success": False,
+                    "status": "error",
+                    "error": f"Failed to process generated asset: {str(e)}",
+                    "task_id": task_id
+                }), 500
+        
+        else:
+            # Task failed or timed out
+            task_info['status'] = 'failed'
+            task_info['error'] = result.get('error', 'Unknown error')
+            
+            logger.error(f"Task {task_id} failed: {result.get('error')}")
+            
+            return jsonify({
+                "success": False,
+                "status": "failed",
+                "error": result.get('error', 'Task failed'),
+                "task_id": task_id
+            }), 200
+            
+    except Exception as e:
+        logger.error(f"Error checking status: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@creative_assets_bp.route('/api/get-generated-assets/<campaign_id>', methods=['GET', 'OPTIONS'])
+def get_generated_assets(campaign_id: str):
+    """Get all generated assets for a campaign"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        if campaign_id not in tasks_store:
+            return jsonify({"success": False, "error": "Campaign not found"}), 404
+        
+        campaign = tasks_store[campaign_id]
+        generated_assets = campaign.get('generated_assets', [])
+        
+        # Format assets for frontend
+        formatted_assets = []
+        for i, asset in enumerate(generated_assets):
+            formatted_assets.append({
+                "id": i + 1,  # Simple sequential ID for frontend
+                "title": asset.get('title', f"AI Generated {asset.get('type', 'image').capitalize()}"),
+                "image_url": asset.get('data_uri') if asset.get('type') == 'image' else None,
+                "video_url": asset.get('data_uri') if asset.get('type') == 'video' else None,
+                "data_uri": asset.get('data_uri'),
+                "prompt": asset.get('prompt', ''),
+                "score": asset.get('score', 85),
+                "type": "ai_generated_image" if asset.get('type') == 'image' else "ai_generated_video",
+                "asset_type": asset.get('type', 'image'),
+                "task_id": asset.get('task_id'),
+                "filename": asset.get('filename'),
+                "file_size": asset.get('file_size'),
+                "status": asset.get('status', 'completed')
+            })
+        
+        logger.info(f"Returning {len(formatted_assets)} generated assets for campaign: {campaign_id}")
+        
         return jsonify({
-            'success': True,
-            'message': 'Trends updated successfully',
-            'updated_at': datetime.now().isoformat(),
-            'database_version': '2026.1'
-        })
+            "success": True,
+            "campaign_id": campaign_id,
+            "assets": formatted_assets,
+            "count": len(formatted_assets),
+            "total_generating": len(generation_tasks.get(campaign_id, []))
+        }), 200
         
     except Exception as e:
-        print(f"[Update Trends] ✗ Error: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error getting generated assets: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
-@creative_assets_bp.route('/api/health', methods=['GET'])
-def creative_assets_health():
-    """Health check endpoint for creative assets"""
-    current_trends = analyze_current_trends()
+# Test endpoint to check video generation directly
+@creative_assets_bp.route('/api/test-video-generation', methods=['POST', 'OPTIONS'])
+def test_video_generation():
+    """Test video generation with a simple image"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json()
+        
+        # Use a simple test image or provided image
+        if data and data.get('image_data'):
+            image_data_uri = get_image_as_data_uri(data['image_data'], 'test.jpg')
+        else:
+            # Create a simple test image
+            import base64
+            # Create a simple 1x1 red pixel
+            test_image = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+            image_data_uri = f"data:image/png;base64,{base64.b64encode(test_image).decode('utf-8')}"
+        
+        # Test video generation
+        prompt_text = "Create a simple test video with motion effects. Cinematic style."
+        
+        task_id = create_video_generation_task(
+            image_data_uri,
+            prompt_text,
+            1
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": "Test video generation started",
+            "task_id": task_id,
+            "estimated_time": "2-5 minutes"
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Test video generation error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Add test endpoint for valid ratios
+@creative_assets_bp.route('/api/get-valid-ratios', methods=['GET', 'OPTIONS'])
+def get_valid_ratios():
+    """Get list of valid ratios for Runway ML API"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
     return jsonify({
-        'status': 'healthy',
-        'service': 'creative-assets',
-        'runway_configured': client is not None,
-        'campaigns_count': len(campaigns),
-        'current_year': 2026,
-        'current_trends': {
-            'year': current_trends['year'],
-            'season': current_trends['month'],
-            'quarter': current_trends['quarter']
-        },
-        'trend_database': {
-            'version': '2026.1',
-            'total_trends': sum(len(v) for v in RECENT_TRENDS.values()),
-            'categories': list(RECENT_TRENDS.keys())
-        }
+        "success": True,
+        "valid_ratios": VALID_RATIOS,
+        "recommended_for_images": "1024:1024 (square), 1920:1080 (widescreen), 1080:1920 (portrait)",
+        "recommended_for_videos": "1280:720 (HD), 1920:1080 (Full HD)"
+    }), 200
+
+# Health check endpoint
+@creative_assets_bp.route('/api/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "healthy",
+        "service": "creative-assets",
+        "runway_configured": RUNWAY_API_KEY and RUNWAY_API_KEY != 'your_runway_api_key_here',
+        "campaigns_count": len(tasks_store),
+        "generation_tasks_count": sum(len(tasks) for tasks in generation_tasks.values()),
+        "valid_ratios_count": len(VALID_RATIOS)
     })

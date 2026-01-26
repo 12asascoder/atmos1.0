@@ -143,9 +143,24 @@ def get_projections():
 def get_testing_options():
     return jsonify({
         "testing_options": [
-            {"id": "creative", "variants": 3},
-            {"id": "audience", "variants": 2},
-            {"id": "messaging", "variants": 4}
+            {
+                "id": "creative",
+                "title": "Creative Testing",
+                "description": "Test multiple ad variations",
+                "variants": 3
+            },
+            {
+                "id": "audience",
+                "title": "Audience Testing",
+                "description": "Compare audience segments",
+                "variants": 2
+            },
+            {
+                "id": "messaging",
+                "title": "Message Testing",
+                "description": "Test different copy variations",
+                "variants": 4
+            }
         ]
     }), 200
 
@@ -156,7 +171,13 @@ def budget_recommendations():
 
     return jsonify({
         "goal": goal,
-        "recommended_budget": "$500 - $2000"
+        "recommended_budget": "$500 - $2000",
+        "recommendations": [
+            {"value": 250, "label": "$250", "desc": "Starter"},
+            {"value": 500, "label": "$500", "desc": "Recommended"},
+            {"value": 1000, "label": "$1,000", "desc": "Aggressive"},
+            {"value": 2500, "label": "$2,500", "desc": "Enterprise"}
+        ]
     }), 200
 
 
@@ -170,8 +191,35 @@ def calculate_total_budget(budget_type, budget_amount, duration):
 
 def calculate_projections(budget_type, budget_amount, duration, tests, goal=None):
     daily_spend = budget_amount if budget_type == "daily" else budget_amount / duration
+    
+    # Calculate daily metrics
+    daily_impressions_min = int(daily_spend * 90)
+    daily_impressions_max = int(daily_spend * 124)
+    daily_clicks_min = int(daily_spend * 2.4)
+    daily_clicks_max = int(daily_spend * 3.6)
+    daily_conversions_min = int(daily_spend * 0.17)
+    daily_conversions_max = int(daily_spend * 0.24)
+    
+    # Calculate CPA range
+    total_budget = budget_amount * duration if budget_type == "daily" else budget_amount
+    avg_conversions = (daily_conversions_min + daily_conversions_max) / 2 * duration
+    cpa_min = total_budget / (avg_conversions * 1.2) if avg_conversions > 0 else 0
+    cpa_max = total_budget / (avg_conversions * 0.8) if avg_conversions > 0 else 0
+    
     return {
         "daily_spend": daily_spend,
         "expected_roas": "3.2x - 4.8x",
-        "tests_running": len(tests)
+        "tests_running": len(tests),
+        "daily": {
+            "impressions": f"{daily_impressions_min:,} - {daily_impressions_max:,}",
+            "clicks": f"{daily_clicks_min:,} - {daily_clicks_max:,}",
+            "conversions": f"{daily_conversions_min} - {daily_conversions_max}",
+            "cpa": f"${cpa_min:.2f} - ${cpa_max:.2f}"
+        },
+        "lifetime": {
+            "impressions": f"{int(daily_impressions_min * duration / 1000)}K - {int(daily_impressions_max * duration / 1000)}K",
+            "clicks": f"{(daily_clicks_min * duration / 1000):.1f}K - {(daily_clicks_max * duration / 1000):.1f}K",
+            "conversions": f"{daily_conversions_min * duration} - {daily_conversions_max * duration}",
+            "total_spend": f"${total_budget:,.0f}"
+        }
     }

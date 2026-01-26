@@ -1,3 +1,0 @@
-"""
-AdSurveillance API Package
-"""

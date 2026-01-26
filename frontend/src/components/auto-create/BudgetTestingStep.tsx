@@ -13,7 +13,12 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
   const [saving, setSaving] = useState(false);
   const [projections, setProjections] = useState(null);
   const [testingOptions, setTestingOptions] = useState([]);
-  const [budgetOptions, setBudgetOptions] = useState([]);
+  const [budgetOptions, setBudgetOptions] = useState([
+    { value: 250, label: '$250', desc: 'Starter' },
+    { value: 500, label: '$500', desc: 'Recommended' },
+    { value: 1000, label: '$1,000', desc: 'Aggressive' },
+    { value: 2500, label: '$2,500', desc: 'Enterprise' }
+  ]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [token, setToken] = useState(null);
@@ -58,24 +63,27 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
       setTestingOptions(data.testing_options);
     } catch (error) {
       console.error('Error loading testing options:', error);
+      // Set default testing options if API fails
+      setTestingOptions([
+        { id: 'creative', title: 'Creative Testing', description: 'Test multiple ad variations', variants: 3 },
+        { id: 'audience', title: 'Audience Testing', description: 'Compare audience segments', variants: 2 },
+        { id: 'messaging', title: 'Message Testing', description: 'Test different copy variations', variants: 4 }
+      ]);
     }
   };
 
   const loadBudgetRecommendations = async () => {
     try {
-      // You can pass campaign goal here if available
       const response = await fetch('http://localhost:5050/api/budget-testing/budget-recommendations');
       const data = await response.json();
-      setBudgetOptions(data.recommendations);
+      
+      // Only update if we get valid recommendations
+      if (data.recommendations && Array.isArray(data.recommendations)) {
+        setBudgetOptions(data.recommendations);
+      }
     } catch (error) {
       console.error('Error loading budget recommendations:', error);
-      // Default options if API fails
-      setBudgetOptions([
-        { value: 250, label: '$250', desc: 'Starter' },
-        { value: 500, label: '$500', desc: 'Recommended' },
-        { value: 1000, label: '$1,000', desc: 'Aggressive' },
-        { value: 2500, label: '$2,500', desc: 'Enterprise' }
-      ]);
+      // Keep default options on error (already set in state initialization)
     }
   };
 
@@ -211,7 +219,7 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
   }, [budgetType, budget, duration, selectedTests, token]);
 
   // Default projections if API fails
-  const defaultProjections = {
+  const getDefaultProjections = () => ({
     daily: {
       impressions: '45,000 - 62,000',
       clicks: '1,200 - 1,800',
@@ -222,11 +230,11 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
       impressions: `${(45 * duration).toLocaleString()}K - ${(62 * duration).toLocaleString()}K`,
       clicks: `${(1.2 * duration).toFixed(1)}K - ${(1.8 * duration).toFixed(1)}K`,
       conversions: `${85 * duration} - ${120 * duration}`,
-      total_spend: `$${calculateTotalBudget().toLocaleString()}`
+      total_spend: `${calculateTotalBudget().toLocaleString()}`
     }
-  };
+  });
 
-  const currentProjections = projections || defaultProjections;
+  const currentProjections = projections && projections.daily ? projections : getDefaultProjections();
 
   return (
     <div className="space-y-8">
@@ -382,8 +390,8 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {testingOptions.length > 0 ? testingOptions.map((test) => {
-            const Icon = Zap; // Default icon
+          {testingOptions.map((test) => {
+            const Icon = Zap;
             const isSelected = selectedTests.includes(test.id);
 
             return (
@@ -417,51 +425,7 @@ const BudgetTestingStep = ({ campaignId, onSave, initialData }) => {
                 </div>
               </motion.button>
             );
-          }) : (
-            // Fallback if API doesn't load
-            <>
-              {[
-                { id: 'creative', title: 'Creative Testing', description: 'Test multiple ad variations', variants: 3 },
-                { id: 'audience', title: 'Audience Testing', description: 'Compare audience segments', variants: 2 },
-                { id: 'messaging', title: 'Message Testing', description: 'Test different copy variations', variants: 4 }
-              ].map((test) => {
-                const Icon = Zap;
-                const isSelected = selectedTests.includes(test.id);
-
-                return (
-                  <motion.button
-                    key={test.id}
-                    onClick={() => toggleTest(test.id)}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`p-6 rounded-xl border-2 transition-all text-left ${
-                      isSelected
-                        ? 'border-cyan-500 bg-gradient-to-br from-cyan-50 to-teal-50'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center text-center">
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center mb-4">
-                        <Icon className="w-7 h-7 text-white" />
-                      </div>
-                      <h4 className="font-semibold text-slate-800 mb-2">{test.title}</h4>
-                      <p className="text-sm text-slate-500 mb-3">{test.description}</p>
-                      <span className="px-3 py-1 bg-white rounded-full text-xs text-slate-700 border border-slate-200">
-                        {test.variants} variants
-                      </span>
-                      {isSelected && (
-                        <div className="mt-3 w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </>
-          )}
+          })}
         </div>
       </div>
 
