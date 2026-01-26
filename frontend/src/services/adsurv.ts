@@ -1,6 +1,6 @@
 /* =====================================================
    ADSURV – Unified Frontend API Service
-   Backend: FastAPI (JWT via Flask Auth)
+   Updated: Enhanced with intelligent ad metric calculations based on lifespan
 ===================================================== */
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -83,60 +83,16 @@ export const parseImpressionValue = (impressions: string | number | null | undef
    Types for Metrics
 ========================= */
 
-export interface MetricsData {
-  id: string;
-  competitor_id: string;
-  calculated_at: string;
-  time_period: string;
-  start_date: string;
-  end_date: string;
-  total_ads: number;
-  active_ads: number;
-  ads_per_platform: Record<string, number>;
-  estimated_daily_spend: string | number;
-  estimated_weekly_spend: string | number;
-  estimated_monthly_spend: string | number;
-  total_spend: string | number;
-  avg_cpm: string | number;
-  avg_cpc: string | number;
-  avg_ctr: string | number;
-  avg_frequency: string | number;
-  conversion_probability: string | number;
-  creative_performance: Record<string, any>;
-  top_performing_creatives: Array<any>;
-  funnel_stage_distribution: Record<string, number>;
-  audience_clusters: Array<any>;
-  geo_penetration: Record<string, number>;
-  device_distribution: Record<string, number>;
-  time_of_day_heatmap: Record<string, number>;
-  ad_timeline: Array<any>;
-  trends: Record<string, any>;
-  recommendations: string[];
-  risk_score: number;
-  opportunity_score: number;
-  created_at: string;
-  updated_at: string;
-  competitor_name?: string;
-}
-
-export interface MetricsSummary {
-  competitor_id: string;
-  competitor_name: string;
-  last_calculated: string;
-  active_ads: number;
-  estimated_monthly_spend: string;
-  avg_ctr: string;
-  risk_score: number;
-  opportunity_score: number;
-}
-
 export interface PlatformStats {
   platform: string;
   ad_count: number;
   total_spend: number;
+  total_impressions?: number;
+  active_campaigns?: number;
   avg_ctr: number;
   percentage: number;
   color: string;
+  ad_freshness?: number;
 }
 
 // FIXED: Made fields optional and added proper types
@@ -184,6 +140,72 @@ export interface TrendingSearchResponse {
   top_trending: TrendingAd[];
   platform_performance: Record<string, number>;
   error?: string;
+}
+
+// NEW: Dashboard metrics from ads table
+export interface DashboardMetrics {
+  total_competitor_spend: number;
+  active_campaigns: number;
+  total_impressions: number;
+  avg_ctr: number;
+  total_competitors: number;
+  platform_distribution: Record<string, number>;
+  ad_lifespan_days?: number;
+  freshness_score?: number;
+  recent_ads?: number;
+  total_ads?: number;
+}
+
+// NEW: Ad data interface from ads table
+export interface AdData {
+  id: string;
+  competitor_id: string;
+  competitor_name: string;
+  platform: string;
+  headline: string;
+  description: string;
+  full_text: string;
+  destination_url: string;
+  image_url: string;
+  video_url: string;
+  format: string;
+  impressions: string | number;
+  spend: string | number;
+  is_active: boolean;
+  first_seen: string;
+  last_seen: string;
+  platform_ad_id?: string;
+  created_at?: string;
+}
+
+// NEW: Enhanced PlatformStats interface
+export interface EnhancedPlatformStats {
+  platform: string;
+  ad_count: number;
+  total_spend: number;
+  total_impressions: number;
+  active_campaigns: number;
+  avg_ctr: number;
+  percentage: number;
+  color: string;
+  ad_freshness: number;
+  recent_ads: number;
+  avg_lifespan_days: number;
+}
+
+// NEW: Competitor interface
+export interface Competitor {
+  id: string;
+  name: string;
+  domain?: string;
+  industry?: string;
+  estimated_monthly_spend?: number;
+  created_at: string;
+  ads_count: number;
+  last_fetched_at?: string;
+  is_active: boolean;
+  user_id: string;
+  last_fetch_status: string;
 }
 
 /* =========================
@@ -253,7 +275,7 @@ export const UsersAPI = {
 ===================================================== */
 
 export const CompetitorsAPI = {
-  list: () => fetchWithAuth('/api/competitors/'),
+  list: (): Promise<Competitor[]> => fetchWithAuth('/api/competitors/'),
 
   create: (data: {
     name: string;
@@ -298,7 +320,7 @@ export const AdsAPI = {
     competitor_id: string,
     platform?: string,
     limit: number = 100
-  ) => {
+  ): Promise<AdData[]> => {
     const params = new URLSearchParams();
     if (platform) params.append('platform', platform);
     params.append('limit', String(limit));
@@ -313,6 +335,21 @@ export const AdsAPI = {
     
     return fetchWithAuth(`/api/ads/fetches?${params}`);
   },
+
+  // Get all ads for user's competitors
+  getAllAds: (limit: number = 500): Promise<AdData[]> => {
+    return fetchWithAuth(`/api/ads/all?limit=${limit}`);
+  },
+
+  // Get dashboard metrics from ads table
+  getDashboardMetrics: (): Promise<DashboardMetrics> => {
+    return fetchWithAuth('/api/ads/dashboard-metrics');
+  },
+
+  // Get platform stats from ads table
+  getPlatformStats: (): Promise<PlatformStats[]> => {
+    return fetchWithAuth('/api/ads/platform-stats');
+  }
 };
 
 /* =====================================================
@@ -349,133 +386,8 @@ export const PlatformsAPI = {
 };
 
 /* =====================================================
-   METRICS (SURV_METRICS)
+   REMOVED: METRICS API (surv_metrics) - Using ads table instead
 ===================================================== */
-
-export const MetricsAPI = {
-  calculate: (data: {
-    competitor_ids?: string[];
-    time_period: 'daily' | 'weekly' | 'monthly' | 'all_time';
-    force_recalculate?: boolean;
-  }) =>
-    fetchWithAuth('/api/metrics/calculate', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  getByCompetitor: (
-    competitor_id: string,
-    time_period?: string,
-    limit: number = 10
-  ): Promise<MetricsData[]> => {
-    const params = new URLSearchParams();
-    if (time_period) params.append('time_period', time_period);
-    params.append('limit', String(limit));
-    
-    return fetchWithAuth(`/api/metrics/competitor/${competitor_id}?${params}`);
-  },
-
-  getLatestMetrics: (): Promise<MetricsData[]> => {
-    return fetchWithAuth('/api/metrics/summary').then(summary => {
-      return summary.map((item: any) => ({
-        id: '',
-        competitor_id: item.competitor_id,
-        competitor_name: item.competitor_name,
-        calculated_at: item.last_calculated,
-        time_period: 'weekly',
-        start_date: '',
-        end_date: '',
-        total_ads: 0,
-        active_ads: item.active_ads,
-        ads_per_platform: {},
-        estimated_daily_spend: 0,
-        estimated_weekly_spend: 0,
-        estimated_monthly_spend: item.estimated_monthly_spend,
-        total_spend: 0,
-        avg_cpm: 0,
-        avg_cpc: 0,
-        avg_ctr: item.avg_ctr,
-        avg_frequency: 0,
-        conversion_probability: 0,
-        creative_performance: {},
-        top_performing_creatives: [],
-        funnel_stage_distribution: {},
-        audience_clusters: [],
-        geo_penetration: {},
-        device_distribution: {},
-        time_of_day_heatmap: {},
-        ad_timeline: [],
-        trends: {},
-        recommendations: [],
-        risk_score: item.risk_score,
-        opportunity_score: item.opportunity_score,
-        created_at: '',
-        updated_at: ''
-      }));
-    });
-  },
-
-  getMetricsByTimePeriod: (time_period: string): Promise<MetricsData[]> => {
-    return fetchWithAuth(`/api/metrics/competitor/all?time_period=${time_period}`).catch(() => []);
-  },
-
-  summary: (): Promise<MetricsSummary[]> => {
-    return fetchWithAuth('/api/metrics/summary');
-  },
-
-  platformStats: (): Promise<any> => {
-    return fetchWithAuth('/api/metrics/platform-stats');
-  },
-
-  getDetailedMetrics: (metrics_id: string): Promise<MetricsData> => {
-    return fetchWithAuth(`/api/metrics/${metrics_id}`);
-  },
-
-  delete: (metrics_id: string) =>
-    fetchWithAuth(`/api/metrics/${metrics_id}`, {
-      method: 'DELETE',
-    }),
-
-  test: () => fetchWithAuth('/api/metrics/test'),
-
-  getMetricsOverview: async (): Promise<{
-    totalCompetitors: number;
-    totalAdsTracked: number;
-    totalSpend: number;
-    avgCtr: number;
-    topPerformers: MetricsSummary[];
-  }> => {
-    try {
-      const summary = await fetchWithAuth('/api/metrics/summary');
-      const totalAdsTracked = summary.reduce((sum: number, item: MetricsSummary) => sum + item.active_ads, 0);
-      const totalSpend = summary.reduce((sum: number, item: MetricsSummary) => {
-        const spend = parseFloat(item.estimated_monthly_spend.replace(/[^0-9.-]+/g, ''));
-        return sum + (isNaN(spend) ? 0 : spend);
-      }, 0);
-      const avgCtr = summary.reduce((sum: number, item: MetricsSummary) => {
-        const ctr = parseFloat(item.avg_ctr);
-        return sum + (isNaN(ctr) ? 0 : ctr);
-      }, 0) / (summary.length || 1);
-
-      return {
-        totalCompetitors: summary.length,
-        totalAdsTracked,
-        totalSpend,
-        avgCtr,
-        topPerformers: summary.sort((a: MetricsSummary, b: MetricsSummary) => b.opportunity_score - a.opportunity_score).slice(0, 5)
-      };
-    } catch (error) {
-      console.error('Error getting metrics overview:', error);
-      return {
-        totalCompetitors: 0,
-        totalAdsTracked: 0,
-        totalSpend: 0,
-        avgCtr: 0,
-        topPerformers: []
-      };
-    }
-  }
-};
 
 /* =====================================================
    TRENDING - FIXED & ENHANCED
@@ -513,7 +425,7 @@ export const TrendingAPI = {
       });
       
       // Process the response to ensure data consistency
-      return processeTrendingResponse(response);
+      return processTrendingResponse(response);
     } catch (error) {
       console.error('Trending search error:', error);
       throw error;
@@ -559,43 +471,15 @@ export const TrendingAPI = {
 };
 
 /* =====================================================
-   SUMMARY METRICS (SUM_METRICS)
+   REMOVED: SUMMARY METRICS API (sum_metrics) - Using ads table instead
 ===================================================== */
-
-export const SummaryAPI = {
-  calculate: (data: {
-    time_period: 'daily' | 'weekly' | 'monthly' | 'all_time';
-    competitor_ids?: string[];
-    force_recalculate?: boolean;
-  }) =>
-    fetchWithAuth('/api/sum-metrics/calculate', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  dashboard: () => fetchWithAuth('/api/sum-metrics/dashboard'),
-
-  history: (limit: number = 10, time_period?: string) => {
-    const params = new URLSearchParams();
-    params.append('limit', String(limit));
-    if (time_period) params.append('time_period', time_period);
-    
-    return fetchWithAuth(`/api/sum-metrics/history?${params}`);
-  },
-
-  current: (time_period: string = 'weekly') =>
-    fetchWithAuth(`/api/sum-metrics/current?time_period=${time_period}`),
-
-  refresh: () =>
-    fetchWithAuth('/api/sum-metrics/refresh', { method: 'POST' }),
-};
 
 /* =====================================================
    HELPER FUNCTIONS FOR TRENDING DATA
-===================================================== */
+========================= ============== */
 
 // Process trending response to normalize data types
-function processeTrendingResponse(response: TrendingSearchResponse): TrendingSearchResponse {
+function processTrendingResponse(response: TrendingSearchResponse): TrendingSearchResponse {
   // Process each platform's results
   const processedResults: Record<string, TrendingAd[]> = {};
   
@@ -635,3 +519,471 @@ function normalizeAdData(ad: TrendingAd): TrendingAd {
 
 // Export helper for use in components
 export const normalizeTrendingAd = normalizeAdData;
+
+/* =====================================================
+   INTELLIGENT AD METRIC CALCULATION HELPERS
+   Based on ad lifespan (first_seen, last_seen) and other attributes
+===================================================== */
+
+// Helper function to calculate ad spend based on lifespan and platform
+// Enhanced helper function to calculate ad spend based on lifespan and platform
+export const calculateAdSpend = (ad: AdData): number => {
+  // Try to parse actual spend first
+  if (ad.spend) {
+    const parsedSpend = parseSpendValue(ad.spend);
+    if (parsedSpend > 0) return parsedSpend;
+    
+    // Log for debugging
+    console.log(`Ad ${ad.id} spend parsing:`, {
+      original: ad.spend,
+      parsed: parsedSpend,
+      type: typeof ad.spend
+    });
+  }
+  
+  // If spend is 0 or null/undefined, estimate based on lifespan
+  if (ad.first_seen && ad.last_seen) {
+    try {
+      const firstSeen = new Date(ad.first_seen);
+      const lastSeen = new Date(ad.last_seen);
+      const lifespanDays = Math.max(1, (lastSeen.getTime() - firstSeen.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Platform-specific daily spend estimates
+      const platformDailySpend: Record<string, number> = {
+        'meta': 150, 'facebook': 150, 'instagram': 100,
+        'youtube': 300, 'linkedin': 200, 'reddit': 50,
+        'google': 250, 'tiktok': 120, 'twitter': 80,
+        'pinterest': 60
+      };
+      
+      const platform = ad.platform?.toLowerCase() || 'meta';
+      const baseDaily = platformDailySpend[platform] || 100;
+      
+      // Log platform info
+      console.log(`Ad ${ad.id} platform calculation:`, {
+        platform,
+        baseDaily,
+        lifespanDays
+      });
+      
+      let multiplier = ad.is_active ? 1.5 : 0.7;
+      
+      // Adjust for format
+      if (ad.format?.toLowerCase().includes('video')) multiplier *= 1.8;
+      else if (ad.format?.toLowerCase().includes('carousel')) multiplier *= 1.3;
+      else if (ad.format?.toLowerCase().includes('story')) multiplier *= 1.2;
+      
+      const estimated = baseDaily * lifespanDays * multiplier;
+      const cappedEstimate = Math.min(estimated, 1000000); // Cap at $1M
+      
+      console.log(`Ad ${ad.id} estimated spend:`, {
+        estimated,
+        cappedEstimate,
+        multiplier,
+        format: ad.format
+      });
+      
+      return cappedEstimate;
+    } catch (error) {
+      console.error(`Error calculating spend for ad ${ad.id}:`, error);
+      return 0;
+    }
+  }
+  
+  console.log(`Ad ${ad.id} no lifespan data, returning 0`);
+  return 0;
+};
+
+// Helper function to calculate ad impressions
+export const calculateAdImpressions = (ad: AdData): number => {
+  // Try to parse actual impressions first
+  if (ad.impressions) {
+    const parsedImpressions = parseImpressionValue(ad.impressions);
+    if (parsedImpressions > 0) return parsedImpressions;
+  }
+  
+  // Estimate based on spend if available
+  const spend = calculateAdSpend(ad);
+  if (spend > 0) {
+    // Platform CPM (Cost Per 1000 Impressions) rates
+    const platformCpm: Record<string, number> = {
+      'meta': 10, 'facebook': 10, 'instagram': 8,
+      'youtube': 12, 'linkedin': 15, 'reddit': 6,
+      'google': 5, 'tiktok': 7
+    };
+    
+    const cpm = platformCpm[ad.platform?.toLowerCase() || 'meta'] || 10;
+    return (spend / cpm) * 1000;
+  }
+  
+  // Estimate based on lifespan
+  if (ad.first_seen && ad.last_seen) {
+    const firstSeen = new Date(ad.first_seen);
+    const lastSeen = new Date(ad.last_seen);
+    const lifespanDays = Math.max(1, (lastSeen.getTime() - firstSeen.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Platform-specific daily impressions
+    const platformDailyImpressions: Record<string, number> = {
+      'meta': 5000, 'facebook': 5000, 'instagram': 8000,
+      'youtube': 15000, 'linkedin': 3000, 'reddit': 2000,
+      'google': 10000, 'tiktok': 12000
+    };
+    
+    const baseDaily = platformDailyImpressions[ad.platform?.toLowerCase() || 'meta'] || 5000;
+    let multiplier = ad.is_active ? 1.3 : 1.0;
+    
+    // Adjust for format
+    if (ad.format?.toLowerCase().includes('video')) multiplier *= 1.5;
+    else if (ad.format?.toLowerCase().includes('story')) multiplier *= 1.8;
+    
+    const estimated = baseDaily * lifespanDays * multiplier;
+    return Math.min(estimated, 10000000); // Cap at 10M
+  }
+  
+  return 0;
+};
+
+// Helper function to check if ad is recent
+export const isRecentAd = (ad: AdData, days = 30): boolean => {
+  if (!ad.last_seen) return false;
+  
+  try {
+    const lastSeen = new Date(ad.last_seen);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return lastSeen > cutoffDate;
+  } catch (error) {
+    console.error('Error checking if ad is recent:', error);
+    return false;
+  }
+};
+
+// Helper function to calculate ad lifespan in days
+export const calculateAdLifespan = (ad: AdData): number => {
+  if (!ad.first_seen || !ad.last_seen) return 0;
+  
+  try {
+    const firstSeen = new Date(ad.first_seen);
+    const lastSeen = new Date(ad.last_seen);
+    const lifespanDays = (lastSeen.getTime() - firstSeen.getTime()) / (1000 * 60 * 60 * 24);
+    return Math.max(lifespanDays, 1);
+  } catch (error) {
+    console.error('Error calculating ad lifespan:', error);
+    return 0;
+  }
+};
+
+/* =====================================================
+   ENHANCED FRONTEND CALCULATION HELPERS
+   With intelligent estimation based on ad lifespan
+===================================================== */
+
+// Enhanced dashboard metrics calculation
+export const calculateDashboardMetrics = (ads: AdData[], competitors: Competitor[]): DashboardMetrics => {
+  let totalSpend = 0;
+  let totalImpressions = 0;
+  let activeCampaigns = 0;
+  let recentAds = 0;
+  let totalLifespan = 0;
+  const platformDistribution: Record<string, number> = {};
+  
+  ads.forEach(ad => {
+    // Calculate spend and impressions using intelligent estimation
+    const spendValue = calculateAdSpend(ad);
+    const impressionValue = calculateAdImpressions(ad);
+    
+    totalSpend += spendValue;
+    totalImpressions += impressionValue;
+    
+    if (ad.is_active) {
+      activeCampaigns += 1;
+    }
+    
+    // Check if ad is recent
+    if (isRecentAd(ad)) {
+      recentAds += 1;
+    }
+    
+    // Calculate lifespan
+    const lifespan = calculateAdLifespan(ad);
+    totalLifespan += lifespan;
+    
+    // Platform distribution
+    if (ad.platform) {
+      const platform = ad.platform.toLowerCase();
+      platformDistribution[platform] = (platformDistribution[platform] || 0) + 1;
+    }
+  });
+  
+  // Calculate average CTR with freshness adjustment
+  let avg_ctr = 0.02; // Default 2% CTR
+  
+  if (ads.length > 0) {
+    // Adjust CTR based on ad freshness
+    const freshnessRatio = recentAds / ads.length;
+    avg_ctr = 0.02 + (freshnessRatio * 0.01); // Up to 1% bonus for fresh ads
+    avg_ctr = Math.min(avg_ctr, 0.05); // Cap at 5%
+  }
+  
+  // Calculate average lifespan
+  const avgLifespanDays = ads.length > 0 ? totalLifespan / ads.length : 0;
+  
+  // Calculate freshness score
+  const freshnessScore = ads.length > 0 ? (recentAds / ads.length) * 100 : 0;
+  
+  return {
+    total_competitor_spend: Math.round(totalSpend),
+    active_campaigns: activeCampaigns,
+    total_impressions: Math.round(totalImpressions),
+    avg_ctr: parseFloat(avg_ctr.toFixed(4)),
+    total_competitors: competitors.length,
+    platform_distribution: platformDistribution,
+    ad_lifespan_days: parseFloat(avgLifespanDays.toFixed(1)),
+    freshness_score: parseFloat(freshnessScore.toFixed(1)),
+    recent_ads: recentAds,
+    total_ads: ads.length
+  };
+};
+
+// Enhanced platform stats calculation
+export const calculatePlatformStats = (ads: AdData[]): EnhancedPlatformStats[] => {
+  const platformMap: Record<string, EnhancedPlatformStats> = {};
+  
+  // Colors for platforms
+  const platformColors: Record<string, string> = {
+    'meta': '#00C2B3',
+    'facebook': '#00C2B3',
+    'instagram': '#4A90E2',
+    'youtube': '#FF6B6B',
+    'linkedin': '#FFD166',
+    'reddit': '#9B59B6',
+    'tiktok': '#2ECC71',
+    'google': '#3498DB',
+    'twitter': '#1ABC9C',
+    'pinterest': '#E74C3C'
+  };
+  
+  // Calculate totals per platform
+  ads.forEach(ad => {
+    if (ad.platform) {
+      const platform = ad.platform.toLowerCase();
+      if (!platformMap[platform]) {
+        platformMap[platform] = {
+          platform: platform,
+          ad_count: 0,
+          total_spend: 0,
+          total_impressions: 0,
+          active_campaigns: 0,
+          avg_ctr: 0,
+          percentage: 0,
+          color: platformColors[platform] || '#3498DB',
+          ad_freshness: 0,
+          recent_ads: 0,
+          avg_lifespan_days: 0
+        };
+      }
+      
+      // Calculate spend and impressions for this ad
+      const spendValue = calculateAdSpend(ad);
+      const impressionValue = calculateAdImpressions(ad);
+      const lifespan = calculateAdLifespan(ad);
+      
+      platformMap[platform].ad_count += 1;
+      platformMap[platform].total_spend += spendValue;
+      platformMap[platform].total_impressions += impressionValue;
+      platformMap[platform].avg_lifespan_days += lifespan;
+      
+      if (ad.is_active) {
+        platformMap[platform].active_campaigns += 1;
+      }
+      
+      // Check if ad is recent
+      if (isRecentAd(ad)) {
+        platformMap[platform].recent_ads += 1;
+        platformMap[platform].ad_freshness += 1;
+      }
+    }
+  });
+  
+  // Calculate totals and finalize metrics
+  const totalAds = ads.length;
+  const platformStats: EnhancedPlatformStats[] = [];
+  
+  Object.keys(platformMap).forEach(platform => {
+    const data = platformMap[platform];
+    
+    // Calculate percentages
+    data.percentage = totalAds > 0 ? (data.ad_count / totalAds) * 100 : 0;
+    
+    // Calculate freshness percentage
+    const freshnessPercentage = data.ad_count > 0 ? 
+      (data.recent_ads / data.ad_count) * 100 : 0;
+    data.ad_freshness = parseFloat(freshnessPercentage.toFixed(1));
+    
+    // Calculate average lifespan
+    data.avg_lifespan_days = data.ad_count > 0 ? 
+      parseFloat((data.avg_lifespan_days / data.ad_count).toFixed(1)) : 0;
+    
+    // Calculate CTR based on platform and freshness
+    const platformCtrMap: Record<string, number> = {
+      'meta': 0.018,
+      'facebook': 0.018,
+      'instagram': 0.015,
+      'youtube': 0.012,
+      'linkedin': 0.025,
+      'reddit': 0.008,
+      'google': 0.035,
+      'tiktok': 0.010
+    };
+    
+    let avg_ctr = platformCtrMap[platform] || 0.02;
+    
+    // Adjust CTR based on freshness
+    if (freshnessPercentage > 50) {
+      avg_ctr *= 1.2; // 20% boost for fresh platforms
+    }
+    
+    // Adjust CTR based on platform type
+    if (platform === 'linkedin' || platform === 'google') {
+      avg_ctr *= 1.1; // Higher CTR for professional/search platforms
+    }
+    
+    data.avg_ctr = parseFloat(avg_ctr.toFixed(4));
+    
+    platformStats.push(data);
+  });
+  
+  // Sort by total spend (highest first)
+  return platformStats.sort((a, b) => b.total_spend - a.total_spend);
+};
+
+// Enhanced competitor metrics summary
+export interface CompetitorMetricsSummary {
+  competitor_id: string;
+  competitor_name: string;
+  active_ads: number;
+  estimated_monthly_spend: number;
+  total_impressions: number;
+  avg_ctr: number;
+  risk_score: number;
+  opportunity_score: number;
+  freshness_score: number;
+  avg_lifespan_days: number;
+  last_calculated: string;
+}
+
+export const calculateCompetitorMetricsSummary = (ads: AdData[], competitors: Competitor[]): CompetitorMetricsSummary[] => {
+  const competitorMap: Record<string, {
+    competitor_id: string;
+    competitor_name: string;
+    ads: AdData[];
+    total_spend: number;
+    total_impressions: number;
+    active_ads: number;
+    recent_ads: number;
+    total_lifespan: number;
+  }> = {};
+  
+  // Group ads by competitor
+  ads.forEach(ad => {
+    if (ad.competitor_id) {
+      if (!competitorMap[ad.competitor_id]) {
+        competitorMap[ad.competitor_id] = {
+          competitor_id: ad.competitor_id,
+          competitor_name: ad.competitor_name || `Competitor ${ad.competitor_id.substring(0, 8)}`,
+          ads: [],
+          total_spend: 0,
+          total_impressions: 0,
+          active_ads: 0,
+          recent_ads: 0,
+          total_lifespan: 0
+        };
+      }
+      
+      competitorMap[ad.competitor_id].ads.push(ad);
+      
+      // Calculate intelligent metrics
+      const spendValue = calculateAdSpend(ad);
+      const impressionValue = calculateAdImpressions(ad);
+      const lifespan = calculateAdLifespan(ad);
+      
+      competitorMap[ad.competitor_id].total_spend += spendValue;
+      competitorMap[ad.competitor_id].total_impressions += impressionValue;
+      competitorMap[ad.competitor_id].total_lifespan += lifespan;
+      
+      if (ad.is_active) {
+        competitorMap[ad.competitor_id].active_ads += 1;
+      }
+      
+      if (isRecentAd(ad)) {
+        competitorMap[ad.competitor_id].recent_ads += 1;
+      }
+    }
+  });
+  
+  // Calculate metrics for each competitor
+  const competitorMetrics = Object.values(competitorMap).map(competitor => {
+    const monthlySpend = competitor.total_spend;
+    const totalImpressions = competitor.total_impressions;
+    const adCount = competitor.ads.length;
+    
+    // Calculate freshness score
+    const freshnessScore = adCount > 0 ? (competitor.recent_ads / adCount) * 100 : 0;
+    
+    // Calculate average CTR with freshness adjustment
+    let avg_ctr = 0.02; // Default
+    if (freshnessScore > 50) {
+      avg_ctr = 0.025; // Higher CTR for fresh competitors
+    }
+    
+    // Calculate average lifespan
+    const avgLifespan = adCount > 0 ? competitor.total_lifespan / adCount : 0;
+    
+    // Calculate risk score (0-100)
+    // Higher spend = higher risk
+    const riskScore = Math.min(Math.round(monthlySpend / 1000) + 30, 90);
+    
+    // Calculate opportunity score (0-100)
+    // More active ads, higher spend, and freshness = more opportunity
+    const opportunityScore = Math.min(
+      Math.round(
+        (competitor.active_ads * 5) + 
+        (monthlySpend / 2000) + 
+        (freshnessScore * 0.5)
+      ) + 20,
+      95
+    );
+    
+    return {
+      competitor_id: competitor.competitor_id,
+      competitor_name: competitor.competitor_name,
+      active_ads: competitor.active_ads,
+      estimated_monthly_spend: Math.round(monthlySpend),
+      total_impressions: Math.round(totalImpressions),
+      avg_ctr: parseFloat(avg_ctr.toFixed(4)),
+      risk_score: riskScore,
+      opportunity_score: opportunityScore,
+      freshness_score: parseFloat(freshnessScore.toFixed(1)),
+      avg_lifespan_days: parseFloat(avgLifespan.toFixed(1)),
+      last_calculated: new Date().toISOString()
+    };
+  });
+  
+  // Sort by opportunity score (highest first)
+  return competitorMetrics.sort((a, b) => b.opportunity_score - a.opportunity_score);
+};
+
+/* =====================================================
+   EXPORT ALL TYPES AND HELPERS
+===================================================== */
+
+export type {
+  DashboardMetrics as DashboardMetricsType,
+  AdData as AdDataType,
+  Competitor as CompetitorType,
+  TrendingAd as TrendingAdType,
+  TrendingSearchResponse as TrendingSearchResponseType,
+  CompetitorMetricsSummary as CompetitorMetricsSummaryType,
+  EnhancedPlatformStats as EnhancedPlatformStatsType
+};

@@ -73,6 +73,16 @@ import {
   Instagram,
   Linkedin,
   Loader2,
+  Clock as ClockIcon2,
+  History,
+  Hash as HashIcon,
+  ShoppingBag,
+  Shirt,
+  Utensils,
+  Smartphone as SmartphoneIcon,
+  Car,
+  Home,
+  TrendingUp as TrendingUpIcon2,
 } from "lucide-react";
 
 // Import Recharts components
@@ -105,17 +115,13 @@ import {
   Treemap,
 } from "recharts";
 
-// Import API services with types
+// Import UPDATED API services with types
 import {
   UsersAPI,
   CompetitorsAPI,
   AdsAPI,
   PlatformsAPI,
-  MetricsAPI,
-  SummaryAPI,
   TrendingAPI,
-  MetricsData,
-  MetricsSummary,
   PlatformStats,
   TrendingAd as TrendingAdType,
   TrendingSearchResponse,
@@ -190,12 +196,16 @@ interface TrendingAdWithEngagement extends TrendingAdType {
   competitor_name?: string;
 }
 
-interface MetricsOverview {
-  totalCompetitors: number;
-  totalAdsTracked: number;
-  totalSpend: number;
-  avgCtr: number;
-  topPerformers: MetricsSummary[];
+// NEW: Interface for competitor metrics summary (calculated in frontend)
+interface CompetitorMetricsSummary {
+  competitor_id: string;
+  competitor_name: string;
+  active_ads: number;
+  estimated_monthly_spend: number;
+  avg_ctr: number;
+  risk_score: number;
+  opportunity_score: number;
+  last_calculated: string;
 }
 
 // Platform icon mapping
@@ -211,6 +221,70 @@ const platformIcons: Record<string, React.ReactNode> = {
   twitter: <Globe className="w-3.5 h-3.5" />,
   pinterest: <Globe className="w-3.5 h-3.5" />,
 };
+
+// Search history suggestions
+const searchSuggestions = [
+  {
+    id: 1,
+    keyword: "Food ads",
+    icon: <Utensils className="w-4 h-4" />,
+    category: "Food & Beverage",
+  },
+  {
+    id: 2,
+    keyword: "Fashion ads",
+    icon: <Shirt className="w-4 h-4" />,
+    category: "Fashion",
+  },
+  {
+    id: 3,
+    keyword: "Shoes ads",
+    icon: <ShoppingBag className="w-4 h-4" />,
+    category: "Footwear",
+  },
+  {
+    id: 4,
+    keyword: "Tech gadgets",
+    icon: <SmartphoneIcon className="w-4 h-4" />,
+    category: "Technology",
+  },
+  {
+    id: 5,
+    keyword: "Car commercials",
+    icon: <Car className="w-4 h-4" />,
+    category: "Automotive",
+  },
+  {
+    id: 6,
+    keyword: "Home decor",
+    icon: <Home className="w-4 h-4" />,
+    category: "Home & Garden",
+  },
+  {
+    id: 7,
+    keyword: "Fitness products",
+    icon: <TrendingUpIcon2 className="w-4 h-4" />,
+    category: "Health & Fitness",
+  },
+  {
+    id: 8,
+    keyword: "Beauty products",
+    icon: <Sparkles className="w-4 h-4" />,
+    category: "Beauty",
+  },
+  {
+    id: 9,
+    keyword: "Travel deals",
+    icon: <Globe className="w-4 h-4" />,
+    category: "Travel",
+  },
+  {
+    id: 10,
+    keyword: "E-commerce",
+    icon: <ShoppingBag className="w-4 h-4" />,
+    category: "Shopping",
+  },
+];
 
 const AdSurveillance = () => {
   // User state
@@ -238,7 +312,7 @@ const AdSurveillance = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCompany, setSelectedCompany] = useState<string>("all");
 
-  // Metrics state
+  // Metrics state - UPDATED: Use frontend calculation
   const [summaryMetrics, setSummaryMetrics] = useState<SummaryMetrics | null>(
     null,
   );
@@ -246,13 +320,9 @@ const AdSurveillance = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<
     "daily" | "weekly" | "monthly" | "all_time"
   >("weekly");
-  const [allMetrics, setAllMetrics] = useState<MetricsData[]>([]);
-  const [metricsSummary, setMetricsSummary] = useState<MetricsSummary[]>([]);
-  const [metricsOverview, setMetricsOverview] =
-    useState<MetricsOverview | null>(null);
-  const [selectedMetrics, setSelectedMetrics] = useState<MetricsData | null>(
-    null,
-  );
+  const [metricsSummary, setMetricsSummary] = useState<
+    CompetitorMetricsSummary[]
+  >([]);
   const [isCalculatingMetrics, setIsCalculatingMetrics] = useState(false);
 
   // View modes
@@ -290,9 +360,331 @@ const AdSurveillance = () => {
   >(["meta", "instagram", "youtube"]);
   const [isSearchingTrending, setIsSearchingTrending] = useState(false);
   const [showTrendingSearch, setShowTrendingSearch] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
 
   // Error state
   const [error, setError] = useState<string | null>(null);
+
+  // ============================================
+  // CALCULATION HELPER FUNCTIONS
+  // ============================================
+
+  // Helper function to calculate ad lifespan in days
+  const calculateAdLifespan = (ad: AdData): number => {
+    if (!ad.first_seen || !ad.last_seen) return 0;
+    
+    try {
+      const firstSeen = new Date(ad.first_seen);
+      const lastSeen = new Date(ad.last_seen);
+      const lifespanDays = (lastSeen.getTime() - firstSeen.getTime()) / (1000 * 60 * 60 * 24);
+      return Math.max(lifespanDays, 1);
+    } catch (error) {
+      console.error('Error calculating ad lifespan:', error);
+      return 0;
+    }
+  };
+
+  // Helper function to calculate ad spend based on lifespan and platform
+  const calculateAdSpend = (ad: AdData): number => {
+    // Try to parse actual spend first
+    if (ad.spend) {
+      const parsedSpend = parseSpendValue(ad.spend);
+      if (parsedSpend > 0) {
+        return parsedSpend;
+      }
+    }
+    
+    // Estimate based on lifespan if no spend data
+    if (ad.first_seen && ad.last_seen) {
+      const lifespanDays = calculateAdLifespan(ad);
+      if (lifespanDays > 0) {
+        // Platform-specific daily spend estimates
+        const platformDailySpend: Record<string, number> = {
+          'meta': 150, 'facebook': 150, 'instagram': 100,
+          'youtube': 300, 'linkedin': 200, 'reddit': 50,
+          'google': 250, 'tiktok': 120, 'twitter': 80,
+          'pinterest': 60
+        };
+        
+        const platform = ad.platform?.toLowerCase() || 'meta';
+        const baseDaily = platformDailySpend[platform] || 100;
+        
+        let multiplier = ad.is_active ? 1.5 : 0.7;
+        
+        // Adjust for format
+        if (ad.format?.toLowerCase().includes('video')) multiplier *= 1.8;
+        else if (ad.format?.toLowerCase().includes('carousel')) multiplier *= 1.3;
+        else if (ad.format?.toLowerCase().includes('story')) multiplier *= 1.2;
+        
+        const estimated = baseDaily * lifespanDays * multiplier;
+        return Math.min(estimated, 1000000); // Cap at $1M
+      }
+    }
+    
+    // If no data at all, use platform minimum
+    const platformMinSpend: Record<string, number> = {
+      'meta': 300, 'facebook': 300, 'instagram': 200,
+      'youtube': 500, 'linkedin': 400, 'reddit': 100,
+      'google': 500, 'tiktok': 200, 'twitter': 150,
+      'pinterest': 100
+    };
+    
+    const platform = ad.platform?.toLowerCase() || 'meta';
+    return platformMinSpend[platform] || 200;
+  };
+
+  // Helper function to calculate ad impressions
+  const calculateAdImpressions = (ad: AdData): number => {
+    // Try to parse actual impressions first
+    if (ad.impressions) {
+      const parsedImpressions = parseImpressionValue(ad.impressions);
+      if (parsedImpressions > 0) {
+        return parsedImpressions;
+      }
+    }
+    
+    // Estimate based on spend if available
+    const spend = calculateAdSpend(ad);
+    if (spend > 0) {
+      // Platform CPM (Cost Per 1000 Impressions) rates
+      const platformCpm: Record<string, number> = {
+        'meta': 10, 'facebook': 10, 'instagram': 8,
+        'youtube': 12, 'linkedin': 15, 'reddit': 6,
+        'google': 5, 'tiktok': 7, 'twitter': 9,
+        'pinterest': 8
+      };
+      
+      const platform = ad.platform?.toLowerCase() || 'meta';
+      const cpm = platformCpm[platform] || 10;
+      return (spend / cpm) * 1000;
+    }
+    
+    // Estimate based on lifespan
+    if (ad.first_seen && ad.last_seen) {
+      const lifespanDays = calculateAdLifespan(ad);
+      if (lifespanDays > 0) {
+        // Platform-specific daily impressions
+        const platformDailyImpressions: Record<string, number> = {
+          'meta': 5000, 'facebook': 5000, 'instagram': 8000,
+          'youtube': 15000, 'linkedin': 3000, 'reddit': 2000,
+          'google': 10000, 'tiktok': 12000, 'twitter': 4000,
+          'pinterest': 3000
+        };
+        
+        const platform = ad.platform?.toLowerCase() || 'meta';
+        const baseDaily = platformDailyImpressions[platform] || 5000;
+        
+        let multiplier = ad.is_active ? 1.3 : 1.0;
+        
+        // Adjust for format
+        if (ad.format?.toLowerCase().includes('video')) multiplier *= 1.5;
+        else if (ad.format?.toLowerCase().includes('story')) multiplier *= 1.8;
+        
+        const estimated = baseDaily * lifespanDays * multiplier;
+        return Math.min(estimated, 10000000); // Cap at 10M
+      }
+    }
+    
+    // If no data at all, use platform minimum
+    const platformMinImpressions: Record<string, number> = {
+      'meta': 10000, 'facebook': 10000, 'instagram': 15000,
+      'youtube': 25000, 'linkedin': 5000, 'reddit': 3000,
+      'google': 20000, 'tiktok': 20000, 'twitter': 6000,
+      'pinterest': 4000
+    };
+    
+    const platform = ad.platform?.toLowerCase() || 'meta';
+    return platformMinImpressions[platform] || 10000;
+  };
+
+  // ============================================
+  // CALCULATION FUNCTIONS
+  // ============================================
+
+  // NEW: Calculate dashboard metrics from ads and competitors
+  const calculateDashboardMetrics = (
+    ads: AdData[],
+    competitors: Competitor[],
+  ): SummaryMetrics => {
+    console.log(
+      "Calculating dashboard metrics from",
+      ads.length,
+      "ads and",
+      competitors.length,
+      "competitors",
+    );
+
+    let totalSpend = 0;
+    let activeCampaigns = 0;
+    let totalImpressions = 0;
+    const platformDistribution: Record<string, number> = {};
+
+    ads.forEach((ad) => {
+      const spendValue = calculateAdSpend(ad);
+      const impressionValue = calculateAdImpressions(ad);
+
+      totalSpend += spendValue;
+      totalImpressions += impressionValue;
+
+      if (ad.is_active) {
+        activeCampaigns += 1;
+      }
+
+      // Platform distribution
+      if (ad.platform) {
+        const platform = ad.platform.toLowerCase();
+        platformDistribution[platform] =
+          (platformDistribution[platform] || 0) + 1;
+      }
+    });
+
+    // Calculate average CTR (simplified for now)
+    const avg_ctr = ads.length > 0 ? 0.02 : 0; // Default 2% CTR
+
+    const result = {
+      total_competitor_spend: totalSpend,
+      active_campaigns: activeCampaigns,
+      total_impressions: totalImpressions,
+      avg_ctr: avg_ctr,
+      total_competitors: competitors.length,
+      platform_distribution: platformDistribution,
+    };
+
+    console.log("Dashboard metrics result:", result);
+    return result;
+  };
+
+  // NEW: Calculate platform stats from ads
+  const calculatePlatformStats = (ads: AdData[]): PlatformStats[] => {
+    const platformMap: Record<string, PlatformStats> = {};
+
+    // Colors for platforms
+    const platformColors: Record<string, string> = {
+      meta: "#00C2B3",
+      facebook: "#00C2B3",
+      instagram: "#4A90E2",
+      youtube: "#FF6B6B",
+      linkedin: "#FFD166",
+      reddit: "#9B59B6",
+      tiktok: "#2ECC71",
+      google: "#3498DB",
+      twitter: "#1ABC9C",
+      pinterest: "#E74C3C",
+    };
+
+    // Calculate totals per platform
+    ads.forEach((ad) => {
+      if (ad.platform) {
+        const platform = ad.platform.toLowerCase();
+        if (!platformMap[platform]) {
+          platformMap[platform] = {
+            platform: platform,
+            ad_count: 0,
+            total_spend: 0,
+            avg_ctr: 0,
+            percentage: 0,
+            color: platformColors[platform] || "#3498DB",
+          };
+        }
+
+        // Use the new calculateAdSpend function
+        const spendValue = calculateAdSpend(ad);
+
+        platformMap[platform].ad_count += 1;
+        platformMap[platform].total_spend += spendValue || 0;
+      }
+    });
+
+    // Calculate total for percentages
+    const totalAds = ads.length;
+
+    // Calculate percentages and average CTR
+    const platformStats = Object.values(platformMap).map((platform) => ({
+      ...platform,
+      percentage: totalAds > 0 ? (platform.ad_count / totalAds) * 100 : 0,
+      avg_ctr: 0.02, // Default CTR for now
+    }));
+
+    // Sort by spend (highest first)
+    return platformStats.sort((a, b) => b.total_spend - a.total_spend);
+  };
+
+  // NEW: Calculate competitor metrics summary
+  const calculateCompetitorMetricsSummary = (
+    ads: AdData[],
+    competitors: Competitor[],
+  ): CompetitorMetricsSummary[] => {
+    const competitorMap: Record<
+      string,
+      {
+        competitor_id: string;
+        competitor_name: string;
+        ads: AdData[];
+        total_spend: number;
+        active_ads: number;
+      }
+    > = {};
+
+    // Group ads by competitor
+    ads.forEach((ad) => {
+      if (ad.competitor_id) {
+        if (!competitorMap[ad.competitor_id]) {
+          competitorMap[ad.competitor_id] = {
+            competitor_id: ad.competitor_id,
+            competitor_name:
+              ad.competitor_name ||
+              `Competitor ${ad.competitor_id.substring(0, 8)}`,
+            ads: [],
+            total_spend: 0,
+            active_ads: 0,
+          };
+        }
+
+        competitorMap[ad.competitor_id].ads.push(ad);
+        // Use the new calculateAdSpend function
+        const spendValue = calculateAdSpend(ad);
+        competitorMap[ad.competitor_id].total_spend += spendValue || 0;
+
+        if (ad.is_active) {
+          competitorMap[ad.competitor_id].active_ads += 1;
+        }
+      }
+    });
+
+    // Calculate metrics for each competitor
+    const competitorMetrics = Object.values(competitorMap).map((competitor) => {
+      const monthlySpend = competitor.total_spend;
+      const avg_ctr = 0.02; // Default CTR
+
+      // Calculate risk score (0-100)
+      // Higher spend = higher risk
+      const riskScore = Math.min(Math.round(monthlySpend / 1000) + 30, 90);
+
+      // Calculate opportunity score (0-100)
+      // More active ads and higher spend = more opportunity
+      const opportunityScore = Math.min(
+        Math.round(competitor.active_ads * 5 + monthlySpend / 2000) + 20,
+        95,
+      );
+
+      return {
+        competitor_id: competitor.competitor_id,
+        competitor_name: competitor.competitor_name,
+        active_ads: competitor.active_ads,
+        estimated_monthly_spend: monthlySpend,
+        avg_ctr: avg_ctr,
+        risk_score: riskScore,
+        opportunity_score: opportunityScore,
+        last_calculated: new Date().toISOString(),
+      };
+    });
+
+    // Sort by opportunity score (highest first)
+    return competitorMetrics.sort(
+      (a, b) => b.opportunity_score - a.opportunity_score,
+    );
+  };
 
   // Initialize
   useEffect(() => {
@@ -334,14 +726,15 @@ const AdSurveillance = () => {
 
       // Load data that depends on competitors
       if (competitorsList.length > 0) {
-        await Promise.all([
-          loadSummaryMetrics(),
-          loadPlatformStats(),
-          loadRecentAds(),
-          loadTrendingAds(),
-          loadMetricsSummary(),
-          loadMetricsOverview(),
-        ]);
+        await Promise.all([loadRecentAds(), loadTrendingAds()]);
+
+        // Calculate metrics in frontend after loading ads
+        await calculateFrontendMetrics(competitorsList);
+      } else {
+        // Reset metrics if no competitors
+        setSummaryMetrics(null);
+        setPlatformStats([]);
+        setMetricsSummary([]);
       }
     } catch (error) {
       console.error("Error loading competitors:", error);
@@ -349,182 +742,79 @@ const AdSurveillance = () => {
     }
   };
 
-  // Load metrics summary
-  const loadMetricsSummary = async () => {
+  // NEW: Calculate metrics in frontend
+  const calculateFrontendMetrics = async (competitorsList: Competitor[]) => {
     try {
-      console.log("Loading metrics summary...");
-      const data = await MetricsAPI.summary();
-      console.log("Metrics summary API response:", data);
-      if (Array.isArray(data)) {
-        setMetricsSummary(data);
-        // Use first metric as selected if available
-        if (data.length > 0 && data[0]) {
-          // Transform summary item to full metrics
-          const firstMetric = data[0];
-          const metricData: MetricsData = {
-            id: "",
-            competitor_id: firstMetric.competitor_id,
-            competitor_name: firstMetric.competitor_name,
-            calculated_at: firstMetric.last_calculated,
-            time_period: "weekly",
-            start_date: "",
-            end_date: "",
-            total_ads: 0,
-            active_ads: firstMetric.active_ads,
-            ads_per_platform: {},
-            estimated_daily_spend: 0,
-            estimated_weekly_spend: 0,
-            estimated_monthly_spend: parseSpendValue(
-              firstMetric.estimated_monthly_spend,
-            ),
-            total_spend: 0,
-            avg_cpm: 0,
-            avg_cpc: 0,
-            avg_ctr: parseFloat(firstMetric.avg_ctr) || 0,
-            avg_frequency: 0,
-            conversion_probability: 0,
-            creative_performance: {},
-            top_performing_creatives: [],
-            funnel_stage_distribution: {},
-            audience_clusters: [],
-            geo_penetration: {},
-            device_distribution: {},
-            time_of_day_heatmap: {},
-            ad_timeline: [],
-            trends: {},
-            recommendations: [],
-            risk_score: firstMetric.risk_score,
-            opportunity_score: firstMetric.opportunity_score,
-            created_at: "",
-            updated_at: "",
-          };
-          setSelectedMetrics(metricData);
+      console.log("Calculating metrics in frontend...");
+
+      // Get all ads first
+      let allAds: AdData[] = [];
+      try {
+        const adsData = await AdsAPI.getAllAds(500);
+        console.log("All ads API response:", adsData);
+
+        if (Array.isArray(adsData)) {
+          allAds = adsData.map((ad: any) => {
+            // Parse spend and impressions safely
+            const parsedSpend = parseSpendValue(ad.spend);
+            const parsedImpressions = parseImpressionValue(ad.impressions);
+
+            return {
+              ...ad,
+              competitor_name: ad.competitor_name || "",
+              impressions: parsedImpressions,
+              spend: parsedSpend,
+              is_active: ad.is_active !== undefined ? ad.is_active : true,
+            };
+          });
         }
-      }
-    } catch (error) {
-      console.error("Error loading metrics summary:", error);
-    }
-  };
 
-  // Load metrics overview
-  const loadMetricsOverview = async () => {
-    try {
-      console.log("Loading metrics overview...");
-      const data = await MetricsAPI.getMetricsOverview();
-      console.log("Metrics overview API response:", data);
-      setMetricsOverview(data);
-    } catch (error) {
-      console.error("Error loading metrics overview:", error);
-      // Create fallback overview
-      setMetricsOverview({
-        totalCompetitors: competitors.length,
-        totalAdsTracked: ads.length,
-        totalSpend: summaryMetrics?.total_competitor_spend || 0,
-        avgCtr: summaryMetrics?.avg_ctr || 0,
-        topPerformers: [],
-      });
-    }
-  };
-
-  // Load summary metrics
-  const loadSummaryMetrics = async () => {
-    try {
-      console.log("Loading summary metrics...");
-      const data = await SummaryAPI.dashboard();
-      console.log("Summary API response:", data);
-
-      if (data && typeof data === "object") {
-        setSummaryMetrics({
-          total_competitor_spend: data.total_competitor_spend || 0,
-          active_campaigns: data.active_campaigns || 0,
-          total_impressions: data.total_impressions || 0,
-          avg_ctr: data.avg_ctr || 0,
-          total_competitors: data.total_competitors || competitors.length,
-          platform_distribution: data.platform_distribution || {},
-        });
-      }
-    } catch (error) {
-      console.error("Error loading summary metrics:", error);
-      // Fallback to default values
-      setSummaryMetrics({
-        total_competitor_spend: 0,
-        active_campaigns: 0,
-        total_impressions: 0,
-        avg_ctr: 0,
-        total_competitors: competitors.length,
-        platform_distribution: {},
-      });
-    }
-  };
-
-  // Load platform statistics
-  const loadPlatformStats = async () => {
-    try {
-      console.log("Loading platform stats...");
-      const response = await MetricsAPI.platformStats();
-      console.log("Platform stats API response:", response);
-
-      let processedStats: PlatformStats[] = [];
-
-      const colors = [
-        "#00C2B3",
-        "#4A90E2",
-        "#FF6B6B",
-        "#FFD166",
-        "#9B59B6",
-        "#2ECC71",
-      ];
-
-      // Handle different response formats
-      if (response && typeof response === "object") {
-        // If response is already an array
-        if (Array.isArray(response)) {
-          processedStats = response.map((platform: any, index: number) => ({
-            platform:
-              platform.platform || platform.name || `Platform ${index + 1}`,
-            ad_count: platform.ad_count || platform.ads_count || 0,
-            total_spend: platform.total_spend || 0,
-            avg_ctr: platform.avg_ctr || 0,
-            percentage: platform.percentage || 0,
-            color: platform.color || colors[index % colors.length],
-          }));
-        } else if (typeof response === "string") {
-          // If response is a string (JSON), parse it
-          try {
-            const parsed = JSON.parse(response);
-            if (Array.isArray(parsed)) {
-              processedStats = parsed.map((platform: any, index: number) => ({
-                platform:
-                  platform.platform || platform.name || `Platform ${index + 1}`,
-                ad_count: platform.ad_count || platform.ads_count || 0,
-                total_spend: platform.total_spend || 0,
-                avg_ctr: platform.avg_ctr || 0,
-                percentage: platform.percentage || 0,
-                color: platform.color || colors[index % colors.length],
-              }));
-            }
-          } catch (parseError) {
-            console.error("Error parsing platform stats:", parseError);
-          }
-        }
+        setAds(allAds);
+        setFilteredAds(allAds);
+      } catch (adsError) {
+        console.error("Error loading all ads:", adsError);
+        // Continue with empty ads array
       }
 
-      console.log("Processed platform stats:", processedStats);
-      setPlatformStats(processedStats);
+      // Calculate dashboard metrics
+      const dashboardMetrics = calculateDashboardMetrics(
+        allAds,
+        competitorsList,
+      );
+      setSummaryMetrics(dashboardMetrics);
+
+      // Calculate platform stats
+      const platformStatsData = calculatePlatformStats(allAds);
+      setPlatformStats(platformStatsData);
+
+      // Calculate competitor metrics summary
+      const competitorMetrics = calculateCompetitorMetricsSummary(
+        allAds,
+        competitorsList,
+      );
+      setMetricsSummary(competitorMetrics);
+
+      console.log("Frontend metrics calculation complete");
     } catch (error) {
-      console.error("Error loading platform stats:", error);
-      // Keep empty array if no data
+      console.error("Error calculating frontend metrics:", error);
+      setError("Failed to calculate metrics. Using default values.");
+
+      // Set default values
+      const defaultMetrics = calculateDashboardMetrics([], competitorsList);
+      setSummaryMetrics(defaultMetrics);
       setPlatformStats([]);
+      setMetricsSummary([]);
     }
   };
 
-  // Load recent ads
+  // Load recent ads - UPDATED to use getAllAds
   const loadRecentAds = async (competitorId?: string) => {
     try {
       console.log("Loading recent ads...");
       let adsData: AdData[] = [];
 
       if (competitorId) {
+        // Get ads for specific competitor
         const data = await AdsAPI.getCompetitorAds(
           competitorId,
           undefined,
@@ -543,37 +833,68 @@ const AdSurveillance = () => {
               competitor_name: ad.competitor_name || "",
               impressions: parsedImpressions,
               spend: parsedSpend,
+              is_active: ad.is_active !== undefined ? ad.is_active : true,
             };
           });
         }
       } else {
-        // Load ads from all competitors
-        for (const comp of competitors) {
-          try {
-            const data = await AdsAPI.getCompetitorAds(comp.id, undefined, 20);
-            let compAds: AdData[] = [];
+        // Get all ads
+        try {
+          const data = await AdsAPI.getAllAds(500);
+          console.log("All ads API response:", data);
 
-            if (Array.isArray(data)) {
-              compAds = data.map((ad) => {
-                // Parse spend and impressions safely
-                const parsedSpend = parseSpendValue(ad.spend);
-                const parsedImpressions = parseImpressionValue(ad.impressions);
+          if (Array.isArray(data)) {
+            adsData = data.map((ad: any) => {
+              // Parse spend and impressions safely
+              const parsedSpend = parseSpendValue(ad.spend);
+              const parsedImpressions = parseImpressionValue(ad.impressions);
 
-                return {
-                  ...ad,
-                  competitor_name: comp.name,
-                  impressions: parsedImpressions,
-                  spend: parsedSpend,
-                };
-              });
+              return {
+                ...ad,
+                competitor_name: ad.competitor_name || "",
+                impressions: parsedImpressions,
+                spend: parsedSpend,
+                is_active: ad.is_active !== undefined ? ad.is_active : true,
+              };
+            });
+          }
+        } catch (error) {
+          console.error("Error loading all ads:", error);
+          // Fallback to loading competitor by competitor
+          for (const comp of competitors) {
+            try {
+              const data = await AdsAPI.getCompetitorAds(
+                comp.id,
+                undefined,
+                20,
+              );
+              let compAds: AdData[] = [];
+
+              if (Array.isArray(data)) {
+                compAds = data.map((ad) => {
+                  // Parse spend and impressions safely
+                  const parsedSpend = parseSpendValue(ad.spend);
+                  const parsedImpressions = parseImpressionValue(
+                    ad.impressions,
+                  );
+
+                  return {
+                    ...ad,
+                    competitor_name: comp.name,
+                    impressions: parsedImpressions,
+                    spend: parsedSpend,
+                    is_active: ad.is_active !== undefined ? ad.is_active : true,
+                  };
+                });
+              }
+
+              adsData.push(...compAds);
+            } catch (compError) {
+              console.error(
+                `Error loading ads for competitor ${comp.name}:`,
+                compError,
+              );
             }
-
-            adsData.push(...compAds);
-          } catch (error) {
-            console.error(
-              `Error loading ads for competitor ${comp.name}:`,
-              error,
-            );
           }
         }
       }
@@ -594,7 +915,7 @@ const AdSurveillance = () => {
     }
   };
 
-  // Load trending ads - UPDATED: Using new TrendingAPI.search directly
+  // Load trending ads
   const loadTrendingAds = async () => {
     try {
       setIsLoadingTrending(true);
@@ -678,8 +999,10 @@ const AdSurveillance = () => {
   };
 
   // Handle trending search
-  const handleTrendingSearch = async () => {
-    if (!trendingSearchKeyword.trim()) {
+  const handleTrendingSearch = async (keyword?: string) => {
+    const searchKeyword = keyword || trendingSearchKeyword.trim();
+
+    if (!searchKeyword) {
       setError("Please enter a search keyword");
       return;
     }
@@ -691,16 +1014,23 @@ const AdSurveillance = () => {
 
     setIsSearchingTrending(true);
     setError(null);
+    setShowResults(true);
 
     try {
       const result = await TrendingAPI.search({
-        keyword: trendingSearchKeyword.trim(),
+        keyword: searchKeyword,
         platforms: selectedTrendingPlatforms,
         limit_per_platform: 5,
         async_mode: false,
       });
 
       setTrendingSearchResult(result);
+      setTrendingSearchKeyword(searchKeyword);
+
+      // Add to search history
+      if (!searchHistory.includes(searchKeyword)) {
+        setSearchHistory((prev) => [searchKeyword, ...prev.slice(0, 4)]);
+      }
 
       if (result.top_trending && Array.isArray(result.top_trending)) {
         const trendingData = result.top_trending
@@ -722,69 +1052,19 @@ const AdSurveillance = () => {
     }
   };
 
-  // Toggle trending platform selection
-  const toggleTrendingPlatform = (platform: string) => {
-    setSelectedTrendingPlatforms((prev) => {
-      if (prev.includes(platform)) {
-        return prev.filter((p) => p !== platform);
-      } else {
-        return [...prev, platform];
-      }
-    });
-  };
-
-  // Calculate metrics
-  const handleCalculateMetrics = async () => {
-    if (competitors.length === 0) {
-      setError("Add competitors first to calculate metrics");
-      return;
-    }
-
-    setIsCalculatingMetrics(true);
-    setError(null);
-
-    try {
-      const competitorIds = competitors.map((c) => c.id);
-
-      const result = await MetricsAPI.calculate({
-        competitor_ids: competitorIds,
-        time_period: selectedPeriod,
-        force_recalculate: true, // Force recalculation to avoid duplicate key errors
-      });
-
-      console.log("Metrics calculation result:", result);
-
-      // Reload metrics data
-      await Promise.all([
-        loadMetricsSummary(),
-        loadMetricsOverview(),
-        loadPlatformStats(),
-      ]);
-
-      // Show success message
-      setError("Metrics calculated successfully!");
-      setTimeout(() => setError(null), 3000);
-    } catch (error: any) {
-      console.error("Error calculating metrics:", error);
-      setError(`Failed to calculate metrics: ${error.message}`);
-    } finally {
-      setIsCalculatingMetrics(false);
-    }
-  };
-
-  // Calculate engagement score for trending ads - UPDATED: Uses normalized data
+  // Calculate engagement score for trending ads
   const calculateEngagementScore = (ad: TrendingAdType): number => {
     let score = 0;
 
     // Use normalized values from the API
-    const views = typeof ad.views === 'number' ? ad.views : 0;
-    const likes = typeof ad.likes === 'number' ? ad.likes : 0;
-    const comments = typeof ad.comments === 'number' ? ad.comments : 0;
-    const shares = typeof ad.shares === 'number' ? ad.shares : 0;
-    const impressions = typeof ad.impressions === 'number' ? ad.impressions : 0;
+    const views = typeof ad.views === "number" ? ad.views : 0;
+    const likes = typeof ad.likes === "number" ? ad.likes : 0;
+    const comments = typeof ad.comments === "number" ? ad.comments : 0;
+    const shares = typeof ad.shares === "number" ? ad.shares : 0;
+    const impressions = typeof ad.impressions === "number" ? ad.impressions : 0;
 
     // Base engagement score (70 points max)
-    const engagement = likes + (comments * 5) + (shares * 3);
+    const engagement = likes + comments * 5 + shares * 3;
     score += Math.min(Math.pow(engagement, 0.4) * 3, 70);
 
     // View bonus (15 points max)
@@ -798,15 +1078,17 @@ const AdSurveillance = () => {
 
     // Recency bonus (15 points max)
     if (ad.created_at || ad.published_at || ad.taken_at) {
-      const dateStr = ad.created_at || ad.published_at || ad.taken_at || '';
+      const dateStr = ad.created_at || ad.published_at || ad.taken_at || "";
       try {
         const postDate = new Date(dateStr);
         const now = new Date();
-        const hoursDiff = Math.abs(now.getTime() - postDate.getTime()) / (1000 * 60 * 60);
-        
+        const hoursDiff =
+          Math.abs(now.getTime() - postDate.getTime()) / (1000 * 60 * 60);
+
         if (hoursDiff < 1) score += 15;
         else if (hoursDiff < 24) score += 10;
-        else if (hoursDiff < 168) score += 5; // 7 days
+        else if (hoursDiff < 168)
+          score += 5; // 7 days
         else if (hoursDiff < 720) score += 2; // 30 days
       } catch {
         // Date parsing failed, skip recency bonus
@@ -814,21 +1096,21 @@ const AdSurveillance = () => {
     }
 
     // Platform bonus (10 points max)
-    const platform = ad.platform?.toLowerCase() || '';
+    const platform = ad.platform?.toLowerCase() || "";
     const platformBonuses: Record<string, number> = {
-      'tiktok': 10,
-      'instagram': 8,
-      'reddit': 6,
-      'youtube': 5,
-      'meta': 3,
-      'facebook': 3,
-      'linkedin': 4,
+      tiktok: 10,
+      instagram: 8,
+      reddit: 6,
+      youtube: 5,
+      meta: 3,
+      facebook: 3,
+      linkedin: 4,
     };
-    
+
     score += platformBonuses[platform] || 0;
-    
+
     // Video content bonus
-    if (ad.video_url || ad.type?.toLowerCase().includes('video')) {
+    if (ad.video_url || ad.type?.toLowerCase().includes("video")) {
       score += 3;
     }
 
@@ -839,7 +1121,7 @@ const AdSurveillance = () => {
     if (ad.image_url || ad.thumbnail) qualityScore += 2;
     if (ad.video_url) qualityScore += 3;
     if (ad.channel || ad.owner || ad.advertiser) qualityScore += 2;
-    
+
     score += Math.min(qualityScore, 10);
 
     // Add score from API if available
@@ -848,6 +1130,59 @@ const AdSurveillance = () => {
     }
 
     return Math.min(Math.round(score), 100); // Cap at 100
+  };
+
+  // Handle search suggestion click
+  const handleSuggestionClick = (keyword: string) => {
+    setTrendingSearchKeyword(keyword);
+    handleTrendingSearch(keyword);
+  };
+
+  // Toggle trending platform selection
+  const toggleTrendingPlatform = (platform: string) => {
+    setSelectedTrendingPlatforms((prev) => {
+      if (prev.includes(platform)) {
+        return prev.filter((p) => p !== platform);
+      } else {
+        return [...prev, platform];
+      }
+    });
+  };
+
+  // Handle new search
+  const handleNewSearch = () => {
+    setTrendingAds([]);
+    setTrendingSearchResult(null);
+    setShowResults(false);
+    setTrendingSearchKeyword("");
+  };
+
+  // UPDATED: Handle calculate metrics (now uses frontend calculation)
+  const handleCalculateMetrics = async () => {
+    if (competitors.length === 0) {
+      setError("Add competitors first to calculate metrics");
+      return;
+    }
+
+    setIsCalculatingMetrics(true);
+    setError(null);
+
+    try {
+      // Refresh ads first
+      await loadRecentAds();
+
+      // Then recalculate metrics
+      await calculateFrontendMetrics(competitors);
+
+      // Show success message
+      setError("Metrics calculated successfully!");
+      setTimeout(() => setError(null), 3000);
+    } catch (error: any) {
+      console.error("Error calculating metrics:", error);
+      setError(`Failed to calculate metrics: ${error.message}`);
+    } finally {
+      setIsCalculatingMetrics(false);
+    }
   };
 
   // Filter ads based on search, platform, and company
@@ -906,7 +1241,7 @@ const AdSurveillance = () => {
     }
   };
 
-  // Refresh ads handler
+  // Refresh ads handler - UPDATED to recalculate metrics
   const handleRefreshAds = async () => {
     setIsRefreshing(true);
     setError(null);
@@ -917,15 +1252,17 @@ const AdSurveillance = () => {
         await AdsAPI.refreshAll();
       }
 
+      // Wait a moment for backend to process
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       // Reload data after refresh
       await Promise.all([
         loadRecentAds(selectedCompetitor || undefined),
-        loadSummaryMetrics(),
-        loadPlatformStats(),
         loadTrendingAds(),
-        loadMetricsSummary(),
-        loadMetricsOverview(),
       ]);
+
+      // Recalculate metrics
+      await calculateFrontendMetrics(competitors);
     } catch (error: any) {
       console.error("Error refreshing ads:", error);
       setError(error.message || "Failed to refresh ads");
@@ -1054,13 +1391,13 @@ const AdSurveillance = () => {
   };
 
   const proxyImageUrl = (url: string | undefined): string => {
-    if (!url) return 'https://via.placeholder.com/300x200?text=No+Image';
-    
+    if (!url) return "https://via.placeholder.com/300x200?text=No+Image";
+
     // Skip proxy for placeholder images
-    if (url.includes('via.placeholder.com')) return url;
-    
+    if (url.includes("via.placeholder.com")) return url;
+
     // Use a public CORS proxy
-    const proxyUrl = 'https://corsproxy.io/?';
+    const proxyUrl = "https://corsproxy.io/?";
     return proxyUrl + encodeURIComponent(url);
   };
 
@@ -1282,13 +1619,30 @@ const AdSurveillance = () => {
               <span>Refresh</span>
             </button>
 
-            {/* Trending Search Button */}
+            {/* Debug Button - Temporary */}
             <button
-              onClick={() => setShowTrendingSearch(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+              onClick={() => {
+                if (ads.length > 0) {
+                  console.log("Debug spend calculation for first 5 ads:");
+                  ads.slice(0, 5).forEach((ad, index) => {
+                    console.log(`Ad ${index + 1}:`, {
+                      id: ad.id,
+                      platform: ad.platform,
+                      originalSpend: ad.spend,
+                      parsedSpend: parseSpendValue(ad.spend),
+                      calculatedSpend: calculateAdSpend(ad),
+                      first_seen: ad.first_seen,
+                      last_seen: ad.last_seen,
+                      lifespan: calculateAdLifespan(ad),
+                      is_active: ad.is_active,
+                      format: ad.format
+                    });
+                  });
+                }
+              }}
+              className="px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
             >
-              <TrendingUp className="w-4 h-4" />
-              <span>Trending Search</span>
+              Debug
             </button>
           </div>
         </div>
@@ -1334,8 +1688,10 @@ const AdSurveillance = () => {
                       className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                     <button
-                      onClick={handleTrendingSearch}
-                      disabled={isSearchingTrending || !trendingSearchKeyword.trim()}
+                      onClick={() => handleTrendingSearch()}
+                      disabled={
+                        isSearchingTrending || !trendingSearchKeyword.trim()
+                      }
                       className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
                     >
                       {isSearchingTrending ? (
@@ -1359,64 +1715,92 @@ const AdSurveillance = () => {
                     Select Platforms *
                   </label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {['meta', 'instagram', 'youtube', 'reddit', 'linkedin', 'tiktok'].map((platform) => (
+                    {[
+                      "meta",
+                      "instagram",
+                      "youtube",
+                      "reddit",
+                      "linkedin",
+                      "tiktok",
+                    ].map((platform) => (
                       <button
                         key={platform}
                         onClick={() => toggleTrendingPlatform(platform)}
                         className={`p-4 rounded-lg border-2 flex flex-col items-center justify-center gap-2 transition-all ${
                           selectedTrendingPlatforms.includes(platform)
-                            ? 'border-orange-500 bg-orange-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 hover:border-gray-300"
                         }`}
                       >
-                        <div className={`p-2 rounded-full ${
-                          selectedTrendingPlatforms.includes(platform)
-                            ? 'bg-orange-100 text-orange-600'
-                            : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {platformIcons[platform] || <Globe className="w-5 h-5" />}
+                        <div
+                          className={`p-2 rounded-full ${
+                            selectedTrendingPlatforms.includes(platform)
+                              ? "bg-orange-100 text-orange-600"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {platformIcons[platform] || (
+                            <Globe className="w-5 h-5" />
+                          )}
                         </div>
                         <span className="text-sm font-medium capitalize">
-                          {platform === 'meta' ? 'Facebook' : platform}
+                          {platform === "meta" ? "Facebook" : platform}
                         </span>
                         <span className="text-xs text-gray-500">
-                          {selectedTrendingPlatforms.includes(platform) ? 'Selected' : 'Click to select'}
+                          {selectedTrendingPlatforms.includes(platform)
+                            ? "Selected"
+                            : "Click to select"}
                         </span>
                       </button>
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    Select 1-3 platforms for best results. More platforms = more API calls.
+                    Select 1-3 platforms for best results. More platforms = more
+                    API calls.
                   </p>
                 </div>
 
                 {/* How It Works */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-gray-900 mb-2">How Trending Search Works</h4>
+                  <h4 className="font-medium text-gray-900 mb-2">
+                    How Trending Search Works
+                  </h4>
                   <div className="space-y-2 text-sm text-gray-600">
                     <div className="flex items-start gap-2">
                       <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs mt-0.5 flex-shrink-0">
                         1
                       </div>
-                      <span>Real-time API calls to platform APIs (Facebook Ad Library, YouTube, Instagram, etc.)</span>
+                      <span>
+                        Real-time API calls to platform APIs (Facebook Ad
+                        Library, YouTube, Instagram, etc.)
+                      </span>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs mt-0.5 flex-shrink-0">
                         2
                       </div>
-                      <span>Parallel search across selected platforms (all at once, not sequential)</span>
+                      <span>
+                        Parallel search across selected platforms (all at once,
+                        not sequential)
+                      </span>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs mt-0.5 flex-shrink-0">
                         3
                       </div>
-                      <span>Smart scoring algorithm (engagement, recency, platform quality)</span>
+                      <span>
+                        Smart scoring algorithm (engagement, recency, platform
+                        quality)
+                      </span>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs mt-0.5 flex-shrink-0">
                         4
                       </div>
-                      <span>Cross-platform ranking to show top-performing content across all platforms</span>
+                      <span>
+                        Cross-platform ranking to show top-performing content
+                        across all platforms
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1433,8 +1817,12 @@ const AdSurveillance = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={handleTrendingSearch}
-                  disabled={isSearchingTrending || !trendingSearchKeyword.trim() || selectedTrendingPlatforms.length === 0}
+                  onClick={() => handleTrendingSearch()}
+                  disabled={
+                    isSearchingTrending ||
+                    !trendingSearchKeyword.trim() ||
+                    selectedTrendingPlatforms.length === 0
+                  }
                   className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSearchingTrending ? (
@@ -1443,7 +1831,7 @@ const AdSurveillance = () => {
                       Searching...
                     </span>
                   ) : (
-                    'Search Trending Content'
+                    "Search Trending Content"
                   )}
                 </button>
               </div>
@@ -1772,93 +2160,6 @@ const AdSurveillance = () => {
         </div>
       </div>
 
-      {/* Metrics Overview Section */}
-      {metricsOverview && (
-        <div className="mb-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                    <BarChart2 className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      Metrics Overview
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      Key performance indicators across all competitors
-                    </p>
-                  </div>
-                </div>
-                <select
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value as any)}
-                  className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="all_time">All Time</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Total Competitors */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">
-                      Total Competitors
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {metricsOverview.totalCompetitors}
-                  </div>
-                </div>
-
-                {/* Total Ads Tracked */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">
-                      Total Ads Tracked
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {formatNumber(metricsOverview.totalAdsTracked)}
-                  </div>
-                </div>
-
-                {/* Total Spend */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DollarSign className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Total Spend</span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {formatCurrencyShort(metricsOverview.totalSpend)}
-                  </div>
-                </div>
-
-                {/* Average CTR */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <MousePointer className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">Average CTR</span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {formatPercentage(metricsOverview.avgCtr)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Enhanced Trending Ads Section */}
       <div className="mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1873,779 +2174,393 @@ const AdSurveillance = () => {
                     Trending Ads & Content
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Real-time trending content across social platforms
+                    Discover trending ads across all platforms
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {trendingSearchResult && (
+              {showResults && trendingSearchResult && (
+                <div className="flex items-center gap-2">
                   <span className="text-xs px-2 py-1 bg-orange-100 text-orange-800 rounded-full">
                     "{trendingSearchResult.keyword}"
                   </span>
-                )}
-                <button
-                  onClick={() => setShowTrendingSearch(true)}
-                  className="text-xs px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded hover:opacity-90"
-                >
-                  New Search
-                </button>
-              </div>
+                  <span className="text-xs text-gray-500">
+                    {formatDate(new Date().toISOString())}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
-          {isLoadingTrending ? (
-            <div className="p-8 text-center">
-              <div className="w-8 h-8 border-2 border-t-orange-500 border-gray-200 rounded-full animate-spin mx-auto"></div>
-              <p className="mt-3 text-gray-600">Searching trending content...</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Making parallel API calls to {selectedTrendingPlatforms.length} platforms
-              </p>
-            </div>
-          ) : trendingAds.length > 0 ? (
-            <div>
-              <div className="p-5">
-                {/* Platform Performance Summary */}
-                {trendingSearchResult?.platform_performance && (
-                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-3">Platform Performance</h4>
+          <div className="p-5">
+            {!showResults ? (
+              // Initial State: Only search bar and suggestions
+              <>
+                {/* Main Search Bar */}
+                <div className="max-w-3xl mx-auto mb-8">
+                  <div className="relative">
+                    <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={trendingSearchKeyword}
+                      onChange={(e) => setTrendingSearchKeyword(e.target.value)}
+                      placeholder="Search any keyword to discover trending ads..."
+                      className="w-full pl-12 pr-32 py-4 text-lg border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleTrendingSearch()
+                      }
+                    />
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                      <button
+                        onClick={() => handleTrendingSearch()}
+                        disabled={
+                          isSearchingTrending || !trendingSearchKeyword.trim()
+                        }
+                        className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {isSearchingTrending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Searching...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Search className="w-4 h-4" />
+                            <span>Search</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2 text-center">
+                    Press Enter or click Search to discover trending ads
+                  </p>
+                </div>
+
+                {/* Search History & Suggestions */}
+                <div className="max-w-6xl mx-auto">
+                  {/* Search History */}
+                  {searchHistory.length > 0 && (
+                    <div className="mb-8">
+                      <div className="flex items-center gap-2 mb-4">
+                        <History className="w-5 h-5 text-gray-400" />
+                        <h4 className="font-medium text-gray-900">
+                          Recent Searches
+                        </h4>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {searchHistory.map((keyword, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleSuggestionClick(keyword)}
+                            className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center gap-2 transition-colors"
+                          >
+                            <ClockIcon2 className="w-4 h-4" />
+                            <span>{keyword}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Popular Suggestions */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <TrendingUpIcon2 className="w-5 h-5 text-orange-500" />
+                      <h4 className="font-medium text-gray-900">
+                        Popular Search Suggestions
+                      </h4>
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      {Object.entries(trendingSearchResult.platform_performance).map(([platform, avgScore]) => (
-                        <div key={platform} className="bg-white p-3 rounded border border-gray-200">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="p-1.5 bg-gray-100 rounded">
-                              {platformIcons[platform] || <Globe className="w-3 h-3" />}
+                      {searchSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.id}
+                          onClick={() =>
+                            handleSuggestionClick(suggestion.keyword)
+                          }
+                          className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 border border-gray-200 rounded-xl text-left group transition-all hover:shadow-md"
+                        >
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-white rounded-lg group-hover:bg-orange-50 transition-colors">
+                              <div className="text-orange-500">
+                                {suggestion.icon}
+                              </div>
                             </div>
-                            <span className="text-sm font-medium capitalize">
-                              {platform === 'meta' ? 'Facebook' : platform}
-                            </span>
+                            <div className="flex-1">
+                              <h5 className="font-medium text-gray-900 group-hover:text-orange-600">
+                                {suggestion.keyword}
+                              </h5>
+                              <p className="text-xs text-gray-500">
+                                {suggestion.category}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-600">Avg Score:</span>
-                            <span className="text-sm font-semibold text-gray-900">
-                              {avgScore.toFixed(1)}
-                            </span>
+                          <div className="text-xs text-gray-400 flex items-center gap-1">
+                            <HashIcon className="w-3 h-3" />
+                            Click to search trending ads
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              // Results State: Show trending ads in grid
+              <>
+                {isSearchingTrending ? (
+                  <div className="py-12 text-center">
+                    <div className="w-12 h-12 border-2 border-t-orange-500 border-gray-200 rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-gray-600">
+                      Searching trending content for "{trendingSearchKeyword}
+                      "...
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Searching across {selectedTrendingPlatforms.length}{" "}
+                      platforms
+                    </p>
+                  </div>
+                ) : trendingAds.length > 0 ? (
+                  <>
+                    {/* Platform Filter */}
+                    <div className="mb-6">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                        <div>
+                          <h4 className="font-medium text-gray-900">
+                            Trending ads for "
+                            {trendingSearchResult?.keyword ||
+                              trendingSearchKeyword}
+                            "
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            {trendingAds.length} results found • Sorted by
+                            engagement score
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">
+                            Platforms:
+                          </span>
+                          <div className="flex gap-2">
+                            {["meta", "instagram", "youtube", "tiktok"].map(
+                              (platform) => (
+                                <button
+                                  key={platform}
+                                  onClick={() =>
+                                    toggleTrendingPlatform(platform)
+                                  }
+                                  className={`px-3 py-1.5 text-sm rounded-lg border flex items-center gap-2 ${
+                                    selectedTrendingPlatforms.includes(platform)
+                                      ? "border-orange-500 bg-orange-50 text-orange-700"
+                                      : "border-gray-300 hover:border-gray-400"
+                                  }`}
+                                >
+                                  {platformIcons[platform] || (
+                                    <Globe className="w-4 h-4" />
+                                  )}
+                                  <span className="capitalize">
+                                    {platform === "meta"
+                                      ? "Facebook"
+                                      : platform}
+                                  </span>
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trending Ads Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                      {trendingAds.map((ad, index) => (
+                        <div
+                          key={ad.id || `${ad.platform}-${index}`}
+                          className="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-shadow border border-gray-200"
+                        >
+                          {/* Image/Video Preview */}
+                          <div className="aspect-video bg-gray-200 relative overflow-hidden">
+                            {ad.image_url || ad.thumbnail ? (
+                              <img
+                                src={
+                                  proxyImageUrl(ad.image_url) || ad.thumbnail
+                                }
+                                alt={ad.title}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src =
+                                    "https://via.placeholder.com/300x200?text=No+Image";
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center">
+                                <div className="text-center">
+                                  {ad.video_url ? (
+                                    <PlayCircle className="w-12 h-12 text-gray-500" />
+                                  ) : (
+                                    <ImageIcon className="w-12 h-12 text-gray-500" />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            <div className="absolute top-2 left-2">
+                              <span className="px-2 py-1 bg-black/70 text-white text-xs rounded flex items-center gap-1">
+                                {platformIcons[ad.platform] || (
+                                  <Globe className="w-3 h-3" />
+                                )}
+                                <span className="capitalize">
+                                  {ad.platform === "meta"
+                                    ? "Facebook"
+                                    : ad.platform}
+                                </span>
+                              </span>
+                            </div>
+                            <div className="absolute top-2 right-2">
+                              <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs rounded font-bold">
+                                #{ad.rank || index + 1}
+                              </span>
+                            </div>
+                            <div className="absolute bottom-2 left-2">
+                              <span className="px-2 py-1 bg-black/70 text-white text-xs rounded">
+                                Score: {ad.score?.toFixed(1) || "N/A"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Content */}
+                          <div className="p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-medium text-gray-900 truncate">
+                                {ad.competitor_name ||
+                                  ad.advertiser ||
+                                  ad.channel ||
+                                  ad.owner ||
+                                  "Unknown Source"}
+                              </span>
+                              <div className="flex items-center">
+                                <div
+                                  className={`w-2 h-2 rounded-full mr-1 ${
+                                    ad.engagement_score >= 80
+                                      ? "bg-green-500"
+                                      : ad.engagement_score >= 60
+                                        ? "bg-yellow-500"
+                                        : ad.engagement_score >= 40
+                                          ? "bg-orange-500"
+                                          : "bg-red-500"
+                                  }`}
+                                ></div>
+                                <span className="text-xs text-gray-500">
+                                  {ad.engagement_score}%
+                                </span>
+                              </div>
+                            </div>
+
+                            <h4 className="text-sm font-medium text-gray-900 line-clamp-2 mb-2 min-h-[2.5rem]">
+                              {ad.title || ad.headline || "No title"}
+                            </h4>
+
+                            <p className="text-xs text-gray-600 line-clamp-2 mb-3">
+                              {ad.description || "No description"}
+                            </p>
+
+                            {/* Engagement Metrics */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1">
+                                  <Eye className="w-3 h-3 text-gray-400" />
+                                  <span className="text-xs text-gray-600">
+                                    {formatNumber(ad.views || ad.impressions)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Heart className="w-3 h-3 text-red-400" />
+                                  <span className="text-xs text-gray-600">
+                                    {formatNumber(ad.likes)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <MessageCircle className="w-3 h-3 text-blue-400" />
+                                  <span className="text-xs text-gray-600">
+                                    {formatNumber(ad.comments)}
+                                  </span>
+                                </div>
+                              </div>
+                              {ad.spend &&
+                                typeof ad.spend === "number" &&
+                                ad.spend > 0 && (
+                                  <span className="text-xs font-medium text-green-600">
+                                    {formatCurrencyShort(ad.spend)}
+                                  </span>
+                                )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-500">
+                                {formatDate(
+                                  ad.created_at ||
+                                    ad.published_at ||
+                                    ad.taken_at,
+                                )}
+                              </span>
+                              {ad.url && ad.url !== "#" && (
+                                <a
+                                  href={ad.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800 flex items-center"
+                                >
+                                  <LinkIcon className="w-3 h-3 mr-1" />
+                                  View
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
                     </div>
+
+                    {/* New Search Button */}
+                    <div className="mt-8 pt-6 border-t border-gray-200">
+                      <div className="text-center">
+                        <button
+                          onClick={handleNewSearch}
+                          className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:opacity-90 flex items-center gap-2 mx-auto"
+                        >
+                          <Search className="w-4 h-4" />
+                          <span>New Search</span>
+                        </button>
+                        <p className="text-sm text-gray-500 mt-2">
+                          Search for different trending ads
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-12 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <Search className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">
+                      No results found for "{trendingSearchKeyword}"
+                    </h4>
+                    <p className="text-gray-600 mb-6">
+                      Try different keywords or adjust your search
+                    </p>
+                    <button
+                      onClick={handleNewSearch}
+                      className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:opacity-90"
+                    >
+                      Try Another Search
+                    </button>
                   </div>
                 )}
-
-                {/* Trending Ads Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                  {trendingAds.map((ad, index) => (
-                    <div
-                      key={ad.id || `${ad.platform}-${index}`}
-                      className="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-shadow border border-gray-200"
-                    >
-                      {/* Image/Video Preview */}
-                      <div className="aspect-video bg-gray-200 relative overflow-hidden">
-                        {ad.image_url || ad.thumbnail ? (
-                          <img
-                            src={proxyImageUrl(ad.image_url) || ad.thumbnail}
-                            alt={ad.title}
-                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                "https://via.placeholder.com/300x200?text=No+Image";
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center">
-                            <div className="text-center">
-                              {ad.video_url ? (
-                                <PlayCircle className="w-12 h-12 text-gray-500" />
-                              ) : (
-                                <ImageIcon className="w-12 h-12 text-gray-500" />
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        <div className="absolute top-2 left-2">
-                          <span className="px-2 py-1 bg-black/70 text-white text-xs rounded flex items-center gap-1">
-                            {platformIcons[ad.platform] || <Globe className="w-3 h-3" />}
-                            <span className="capitalize">{ad.platform === 'meta' ? 'Facebook' : ad.platform}</span>
-                          </span>
-                        </div>
-                        <div className="absolute top-2 right-2">
-                          <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs rounded font-bold">
-                            #{ad.rank || index + 1}
-                          </span>
-                        </div>
-                        <div className="absolute bottom-2 left-2">
-                          <span className="px-2 py-1 bg-black/70 text-white text-xs rounded">
-                            Score: {ad.score?.toFixed(1) || 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-gray-900 truncate">
-                            {ad.competitor_name || ad.advertiser || ad.channel || ad.owner || 'Unknown Source'}
-                          </span>
-                          <div className="flex items-center">
-                            <div
-                              className={`w-2 h-2 rounded-full mr-1 ${
-                                ad.engagement_score >= 80
-                                  ? "bg-green-500"
-                                  : ad.engagement_score >= 60
-                                    ? "bg-yellow-500"
-                                    : ad.engagement_score >= 40
-                                      ? "bg-orange-500"
-                                      : "bg-red-500"
-                              }`}
-                            ></div>
-                            <span className="text-xs text-gray-500">
-                              {ad.engagement_score}%
-                            </span>
-                          </div>
-                        </div>
-
-                        <h4 className="text-sm font-medium text-gray-900 line-clamp-2 mb-2 min-h-[2.5rem]">
-                          {ad.title || ad.headline || 'No title'}
-                        </h4>
-
-                        <p className="text-xs text-gray-600 line-clamp-2 mb-3">
-                          {ad.description || 'No description'}
-                        </p>
-
-                        {/* Engagement Metrics */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1">
-                              <Eye className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs text-gray-600">
-                                {formatNumber(ad.views || ad.impressions)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Heart className="w-3 h-3 text-red-400" />
-                              <span className="text-xs text-gray-600">
-                                {formatNumber(ad.likes)}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <MessageCircle className="w-3 h-3 text-blue-400" />
-                              <span className="text-xs text-gray-600">
-                                {formatNumber(ad.comments)}
-                              </span>
-                            </div>
-                          </div>
-                          {ad.spend && typeof ad.spend === 'number' && ad.spend > 0 && (
-                            <span className="text-xs font-medium text-green-600">
-                              {formatCurrencyShort(ad.spend)}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-gray-500">
-                            {formatDate(ad.created_at || ad.published_at || ad.taken_at)}
-                          </span>
-                          {ad.url && ad.url !== "#" && (
-                            <a
-                              href={ad.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 flex items-center"
-                            >
-                              <LinkIcon className="w-3 h-3 mr-1" />
-                              View
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Trending Search Details */}
-              {trendingSearchResult && (
-                <div className="px-5 pb-5 border-t border-gray-200 pt-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-medium text-gray-900">
-                      Search Details
-                    </h4>
-                    <span className="text-xs text-gray-500">
-                      {formatDate(new Date().toISOString())}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-xs text-gray-500 mb-1">Keyword</div>
-                      <div className="font-medium text-gray-900">
-                        "{trendingSearchResult.keyword}"
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-xs text-gray-500 mb-1">
-                        Platforms Searched
-                      </div>
-                      <div className="font-medium text-gray-900">
-                        {trendingSearchResult.summary?.platforms_searched?.join(
-                          ", ",
-                        ) || "N/A"}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-xs text-gray-500 mb-1">
-                        Total Results
-                      </div>
-                      <div className="font-medium text-gray-900">
-                        {formatNumber(
-                          trendingSearchResult.summary?.total_results,
-                        )}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-xs text-gray-500 mb-1">
-                        Top Score
-                      </div>
-                      <div className="font-medium text-gray-900">
-                        {trendingSearchResult.summary?.top_score?.toFixed(1) ||
-                          "0"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                <TrendingUp className="w-8 h-8 text-gray-400" />
-              </div>
-              <h4 className="text-lg font-medium text-gray-900 mb-2">
-                No Trending Content Found
-              </h4>
-              <p className="text-gray-600 mb-6">
-                Search for trending ads and content across social platforms
-              </p>
-              <button
-                onClick={() => setShowTrendingSearch(true)}
-                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:opacity-90"
-              >
-                Search Trending Content
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Analytics Dashboard */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-        <div className="px-5 py-4 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-semibold text-gray-900">
-                Analytics Dashboard
-              </h3>
-              <p className="text-sm text-gray-600">
-                Competitor performance insights
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                {
-                  id: "overview",
-                  label: "Overview",
-                  icon: <BarChart2 className="w-4 h-4" />,
-                },
-                {
-                  id: "financial",
-                  label: "Financial",
-                  icon: <DollarSign className="w-4 h-4" />,
-                },
-                {
-                  id: "performance",
-                  label: "Performance",
-                  icon: <Target className="w-4 h-4" />,
-                },
-                {
-                  id: "audience",
-                  label: "Audience",
-                  icon: <Users className="w-4 h-4" />,
-                },
-                {
-                  id: "strategic",
-                  label: "Strategic",
-                  icon: <Lightbulb className="w-4 h-4" />,
-                },
-              ].map((chart) => (
-                <button
-                  key={chart.id}
-                  onClick={() => setActiveChart(chart.id)}
-                  className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-                    activeChart === chart.id
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {chart.icon}
-                  <span className="text-sm">{chart.label}</span>
-                </button>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         </div>
-
-        <div className="p-5">
-          {/* Overview Chart */}
-          {activeChart === "overview" && (
-            <div>
-              {selectedMetrics ? (
-                <div className="space-y-6">
-                  {/* Metrics Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-700">
-                          Estimated Monthly Spend
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-blue-900">
-                        {formatCurrency(
-                          selectedMetrics.estimated_monthly_spend,
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MousePointer className="w-4 h-4 text-green-600" />
-                        <span className="text-sm font-medium text-green-700">
-                          Average CTR
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-green-900">
-                        {formatPercentage(selectedMetrics.avg_ctr)}
-                      </div>
-                    </div>
-
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Activity className="w-4 h-4 text-purple-600" />
-                        <span className="text-sm font-medium text-purple-700">
-                          Active Ads
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-purple-900">
-                        {formatNumber(selectedMetrics.active_ads)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Risk & Opportunity Scores */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <AlertOctagon className="w-5 h-5 text-red-500" />
-                          <h4 className="font-medium text-gray-900">
-                            Risk Score
-                          </h4>
-                        </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${getScoreColor(selectedMetrics.risk_score)}`}
-                        >
-                          {selectedMetrics.risk_score}/100
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all duration-500 bg-red-500"
-                          style={{ width: `${selectedMetrics.risk_score}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <Award className="w-5 h-5 text-green-500" />
-                          <h4 className="font-medium text-gray-900">
-                            Opportunity Score
-                          </h4>
-                        </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium ${getScoreColor(selectedMetrics.opportunity_score)}`}
-                        >
-                          {selectedMetrics.opportunity_score}/100
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all duration-500 bg-green-500"
-                          style={{
-                            width: `${selectedMetrics.opportunity_score}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Platform Distribution */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-4">
-                      Platform Distribution
-                    </h4>
-                    {renderPlatformDistribution(
-                      selectedMetrics.ads_per_platform,
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <BarChart2 className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">
-                    No Analytics Data Yet
-                  </h4>
-                  <p className="text-gray-600 mb-6">
-                    Start tracking competitors to see analytics
-                  </p>
-                  <div className="flex gap-3 justify-center">
-                    <button
-                      onClick={handleCalculateMetrics}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:opacity-90"
-                    >
-                      Calculate Metrics
-                    </button>
-                    <button
-                      onClick={() => setShowAddCompetitor(true)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                    >
-                      Add Competitor
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Financial Metrics */}
-          {activeChart === "financial" && (
-            <div>
-              {selectedMetrics ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Estimated Daily Spend
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(selectedMetrics.estimated_daily_spend)}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Estimated Weekly Spend
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(selectedMetrics.estimated_weekly_spend)}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-purple-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Estimated Monthly Spend
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(
-                          selectedMetrics.estimated_monthly_spend,
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-orange-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Total Spend
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(selectedMetrics.total_spend)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-red-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Average CPM
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(selectedMetrics.avg_cpm)}
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Cost per 1000 impressions
-                      </p>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Average CPC
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatCurrency(selectedMetrics.avg_cpc)}
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Cost per click
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">
-                    No financial metrics available. Calculate metrics first.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Performance Metrics */}
-          {activeChart === "performance" && (
-            <div>
-              {selectedMetrics ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MousePointer className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Average CTR
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatPercentage(selectedMetrics.avg_ctr)}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Activity className="w-4 h-4 text-green-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Average Frequency
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatDecimal(selectedMetrics.avg_frequency)}
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Target className="w-4 h-4 text-purple-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Conversion Probability
-                        </span>
-                      </div>
-                      <div className="text-2xl font-bold text-gray-900">
-                        {formatPercentage(
-                          selectedMetrics.conversion_probability,
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-4">
-                      Creative Performance
-                    </h4>
-                    {renderJSONData(
-                      selectedMetrics.creative_performance,
-                      "creative performance",
-                    )}
-                  </div>
-
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-4">
-                      Top Performing Creatives
-                    </h4>
-                    {renderJSONData(
-                      selectedMetrics.top_performing_creatives,
-                      "top performing creatives",
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">
-                    No performance metrics available. Calculate metrics first.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Audience Metrics */}
-          {activeChart === "audience" && (
-            <div>
-              {selectedMetrics ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Users className="w-5 h-5 text-blue-600" />
-                        <h4 className="font-medium text-gray-900">
-                          Funnel Stage Distribution
-                        </h4>
-                      </div>
-                      {renderJSONData(
-                        selectedMetrics.funnel_stage_distribution,
-                        "funnel stage distribution",
-                      )}
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <UsersIcon className="w-5 h-5 text-green-600" />
-                        <h4 className="font-medium text-gray-900">
-                          Audience Clusters
-                        </h4>
-                      </div>
-                      {renderJSONData(
-                        selectedMetrics.audience_clusters,
-                        "audience clusters",
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <GlobeIcon className="w-5 h-5 text-purple-600" />
-                        <h4 className="font-medium text-gray-900">
-                          Geo Penetration
-                        </h4>
-                      </div>
-                      {renderJSONData(
-                        selectedMetrics.geo_penetration,
-                        "geo penetration",
-                      )}
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Smartphone className="w-5 h-5 text-orange-600" />
-                        <h4 className="font-medium text-gray-900">
-                          Device Distribution
-                        </h4>
-                      </div>
-                      {renderJSONData(
-                        selectedMetrics.device_distribution,
-                        "device distribution",
-                      )}
-                    </div>
-
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <ClockIcon className="w-5 h-5 text-red-600" />
-                        <h4 className="font-medium text-gray-900">
-                          Time of Day Heatmap
-                        </h4>
-                      </div>
-                      {renderJSONData(
-                        selectedMetrics.time_of_day_heatmap,
-                        "time of day heatmap",
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">
-                    No audience metrics available. Calculate metrics first.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Strategic Metrics */}
-          {activeChart === "strategic" && (
-            <div>
-              {selectedMetrics ? (
-                <div className="space-y-6">
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-4">
-                      Ad Timeline
-                    </h4>
-                    {renderJSONData(selectedMetrics.ad_timeline, "ad timeline")}
-                  </div>
-
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 mb-4">Trends</h4>
-                    {renderJSONData(selectedMetrics.trends, "trends")}
-                  </div>
-
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-medium text-gray-900">
-                        Recommendations
-                      </h4>
-                      <Lightbulb className="w-5 h-5 text-yellow-500" />
-                    </div>
-                    {selectedMetrics.recommendations &&
-                    selectedMetrics.recommendations.length > 0 ? (
-                      <ul className="space-y-3">
-                        {selectedMetrics.recommendations.map((rec, index) => (
-                          <li key={index} className="flex items-start gap-3">
-                            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-blue-600 text-xs font-semibold">
-                                {index + 1}
-                              </span>
-                            </div>
-                            <span className="text-sm text-gray-700">{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-gray-500 text-sm">
-                        No recommendations available
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-500">
-                    No strategic metrics available. Calculate metrics first.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Competitors Metrics Summary */}
+      {/* Competitors Metrics Summary - UPDATED: Uses frontend-calculated metrics */}
       {metricsSummary.length > 0 && (
         <div className="mb-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -2660,7 +2575,7 @@ const AdSurveillance = () => {
                       Competitors Performance
                     </h3>
                     <p className="text-sm text-gray-600">
-                      Ranked by opportunity score
+                      Ranked by opportunity score (calculated in frontend)
                     </p>
                   </div>
                 </div>
@@ -3125,6 +3040,7 @@ const AdSurveillance = () => {
                         setSelectedCompany("all");
                         setSelectedCompetitor(null);
                         loadRecentAds();
+                     
                       }}
                       className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                     >

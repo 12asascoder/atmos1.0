@@ -8,9 +8,10 @@ import SignUpPage from './pages/Signup';
 import Home from './pages/Home';
 import OnboardingPage from './components/OnBoarding';
 import AutoCreate from './pages/AutoCreate';
-import AdSurveillance from './components/Sample_1_AdSurveillance';
+import AdSurveillance from './components/AdSurveillance';
 import AdDetailPage from './pages/AdDetailPage';
 import VideoAnalysis from './pages/VideoAnalysis';
+import BookingPage from './pages/BookingPage';
 
 
 /* ✅ NEW PAGE IMPORT */
@@ -72,6 +73,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CommandCenter />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/booking"
+          element={
+            <ProtectedRoute>
+              <BookingPage />
             </ProtectedRoute>
           }
         />

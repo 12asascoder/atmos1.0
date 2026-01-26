@@ -4,74 +4,391 @@ import AdCard from './AdCard';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AdCarouselProps {
-  category: 'recommended' | 'trending' | 'top';
+  category: 'sports' | 'food' | 'fashion' | 'trending' | 'top' | 'recommended';
+  onCardClick?: (ad: any) => void; // Add this prop
 }
 
-const AdCarousel: React.FC<AdCarouselProps> = ({ category }) => {
+const AdCarousel: React.FC<AdCarouselProps> = ({ category, onCardClick }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const ads = [
-    {
-      id: 1,
-      title: 'Emotional / Storytelling Ads',
-      type: 'PROMOTED',
-      image: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=400&h=500&fit=crop',
-      rating: '4.8',
-      votes: '234K',
-      tags: ['Digital', 'Social'],
-      genre: 'Drama'
-    },
-    {
-      id: 2,
-      title: 'Humorous / Comedy Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=500&fit=crop',
-      rating: '4.6',
-      votes: '189K',
-      tags: ['Video', 'Display'],
-      genre: 'Comedy'
-    },
-    {
-      id: 3,
-      title: 'Informative / Educational Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=400&h=500&fit=crop',
-      rating: '4.9',
-      votes: '312K',
-      tags: ['Social', 'Influencer'],
-      genre: 'Documentary'
-    },
-    {
-      id: 4,
-      title: 'Lifestyle Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=500&fit=crop',
-      rating: '4.7',
-      votes: '267K',
-      tags: ['Email', 'Digital'],
-      genre: 'Lifestyle'
-    },
-    {
-      id: 5,
-      title: 'Aspirational / Luxury Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=500&fit=crop',
-      rating: '4.5',
-      votes: '198K',
-      tags: ['Social', 'Video'],
-      genre: 'Luxury'
-    },
-    {
-      id: 6,
-      title: 'User-Generated Content (UGC) Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?w=400&h=500&fit=crop',
-      rating: '4.8',
-      votes: '289K',
-      tags: ['Display', 'Retargeting'],
-      genre: 'UGC'
-    }
-  ];
+  // Define ads for different categories
+  const categoryAds = {
+    sports: [
+      {
+        id: 101,
+        title: 'Nike: Just Do It Campaign',
+        type: 'PROMOTED',
+        image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '256K',
+        tags: ['Athletic', 'Motivational'],
+        genre: 'Sports'
+      },
+      {
+        id: 102,
+        title: 'Adidas: Impossible is Nothing',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '189K',
+        tags: ['Training', 'Teamwear'],
+        genre: 'Sports'
+      },
+      {
+        id: 103,
+        title: 'Under Armour: Rule Yourself',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '234K',
+        tags: ['Fitness', 'Performance'],
+        genre: 'Sports'
+      },
+      {
+        id: 104,
+        title: 'Puma: Forever Faster',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1536922246289-88c42f957773?w=400&h=500&fit=crop',
+        rating: '4.6',
+        votes: '167K',
+        tags: ['Running', 'Speed'],
+        genre: 'Sports'
+      },
+      {
+        id: 105,
+        title: 'Gatorade: Win From Within',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=500&fit=crop',
+        rating: '4.5',
+        votes: '145K',
+        tags: ['Hydration', 'Energy'],
+        genre: 'Sports'
+      },
+      {
+        id: 106,
+        title: 'ESPN: This is SportsCenter',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '212K',
+        tags: ['Broadcast', 'Highlights'],
+        genre: 'Sports'
+      }
+    ],
+    food: [
+      {
+        id: 201,
+        title: "McDonald's: I'm Lovin' It",
+        type: 'PROMOTED',
+        image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=500&fit=crop',
+        rating: '4.6',
+        votes: '298K',
+        tags: ['Fast Food', 'Family'],
+        genre: 'Food'
+      },
+      {
+        id: 202,
+        title: 'KFC: Finger Lickin Good',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&h=500&fit=crop',
+        rating: '4.5',
+        votes: '187K',
+        tags: ['Fried Chicken', 'Comfort'],
+        genre: 'Food'
+      },
+      {
+        id: 203,
+        title: 'Starbucks: Third Place',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '234K',
+        tags: ['Coffee', 'Ambience'],
+        genre: 'Food'
+      },
+      {
+        id: 204,
+        title: 'Coca-Cola: Share a Coke',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '345K',
+        tags: ['Beverage', 'Personalized'],
+        genre: 'Food'
+      },
+      {
+        id: 205,
+        title: 'Domino: Pizza Delivery',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=400&h=500&fit=crop',
+        rating: '4.4',
+        votes: '178K',
+        tags: ['Delivery', 'Fast'],
+        genre: 'Food'
+      },
+      {
+        id: 206,
+        title: 'Ben & Jerry: Peace, Love & Ice Cream',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '267K',
+        tags: ['Dessert', 'Social'],
+        genre: 'Food'
+      }
+    ],
+    fashion: [
+      {
+        id: 301,
+        title: 'Zara: Fast Fashion Leader',
+        type: 'PROMOTED',
+        image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '289K',
+        tags: ['Trendy', 'Affordable'],
+        genre: 'Fashion'
+      },
+      {
+        id: 302,
+        title: 'Gucci: Luxury Redefined',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '156K',
+        tags: ['Luxury', 'Designer'],
+        genre: 'Fashion'
+      },
+      {
+        id: 303,
+        title: 'H&M: Conscious Fashion',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=400&h=500&fit=crop',
+        rating: '4.6',
+        votes: '234K',
+        tags: ['Sustainable', 'Casual'],
+        genre: 'Fashion'
+      },
+      {
+        id: 304,
+        title: 'Louis Vuitton: Travel in Style',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '189K',
+        tags: ['Luxury', 'Travel'],
+        genre: 'Fashion'
+      },
+      {
+        id: 305,
+        title: 'Uniqlo: LifeWear',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400&h=500&fit=crop',
+        rating: '4.5',
+        votes: '167K',
+        tags: ['Minimal', 'Quality'],
+        genre: 'Fashion'
+      },
+      {
+        id: 306,
+        title: 'Levis: Original Denim',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1544441893-675973e31985?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '278K',
+        tags: ['Denim', 'Classic'],
+        genre: 'Fashion'
+      }
+    ],
+    recommended: [
+      {
+        id: 1,
+        title: 'Emotional / Storytelling Ads',
+        type: 'PROMOTED',
+        image: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '234K',
+        tags: ['Digital', 'Social'],
+        genre: 'Drama'
+      },
+      {
+        id: 2,
+        title: 'Humorous / Comedy Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=500&fit=crop',
+        rating: '4.6',
+        votes: '189K',
+        tags: ['Video', 'Display'],
+        genre: 'Comedy'
+      },
+      {
+        id: 3,
+        title: 'Informative / Educational Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '312K',
+        tags: ['Social', 'Influencer'],
+        genre: 'Documentary'
+      },
+      {
+        id: 4,
+        title: 'Lifestyle Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '267K',
+        tags: ['Email', 'Digital'],
+        genre: 'Lifestyle'
+      },
+      {
+        id: 5,
+        title: 'Aspirational / Luxury Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=500&fit=crop',
+        rating: '4.5',
+        votes: '198K',
+        tags: ['Social', 'Video'],
+        genre: 'Luxury'
+      },
+      {
+        id: 6,
+        title: 'User-Generated Content (UGC) Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '289K',
+        tags: ['Display', 'Retargeting'],
+        genre: 'UGC'
+      }
+    ],
+    trending: [
+      {
+        id: 7,
+        title: 'TikTok Viral Challenges',
+        type: 'PROMOTED',
+        image: 'https://images.unsplash.com/photo-1611605698335-8b1569810432?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '345K',
+        tags: ['Viral', 'Gen-Z'],
+        genre: 'Social Media'
+      },
+      {
+        id: 8,
+        title: 'Instagram Reels Campaigns',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1611262588024-d12430b98920?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '298K',
+        tags: ['Short-form', 'Visual'],
+        genre: 'Social Media'
+      },
+      {
+        id: 9,
+        title: 'YouTube Shorts Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1591261730799-ee4e6c2d16d7?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '267K',
+        tags: ['Video', 'Mobile'],
+        genre: 'Digital'
+      },
+      {
+        id: 10,
+        title: 'AR/VR Experience Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=500&fit=crop',
+        rating: '4.6',
+        votes: '189K',
+        tags: ['Immersive', 'Tech'],
+        genre: 'Innovation'
+      },
+      {
+        id: 11,
+        title: 'Interactive Story Ads',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '234K',
+        tags: ['Engagement', 'Choose-your-own'],
+        genre: 'Interactive'
+      },
+      {
+        id: 12,
+        title: 'Metaverse Brand Experiences',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=500&fit=crop',
+        rating: '4.5',
+        votes: '156K',
+        tags: ['Virtual', 'Future'],
+        genre: 'Metaverse'
+      }
+    ],
+    top: [
+      {
+        id: 13,
+        title: 'Apple: Shot on iPhone',
+        type: 'PROMOTED',
+        image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '456K',
+        tags: ['Photography', 'User-generated'],
+        genre: 'Lifestyle'
+      },
+      {
+        id: 14,
+        title: 'Dove: Real Beauty',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '389K',
+        tags: ['Body Positive', 'Empowerment'],
+        genre: 'Drama'
+      },
+      {
+        id: 15,
+        title: 'Google: Year in Search',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1542744095-fcf48d80b0fd?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '412K',
+        tags: ['Data-driven', 'Emotional'],
+        genre: 'Documentary'
+      },
+      {
+        id: 16,
+        title: 'Always: #LikeAGirl',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1517299321609-52687d1bc55a?w=400&h=500&fit=crop',
+        rating: '4.8',
+        votes: '367K',
+        tags: ['Empowerment', 'Social'],
+        genre: 'Drama'
+      },
+      {
+        id: 17,
+        title: 'Airbnb: Belong Anywhere',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=400&h=500&fit=crop',
+        rating: '4.7',
+        votes: '312K',
+        tags: ['Travel', 'Community'],
+        genre: 'Lifestyle'
+      },
+      {
+        id: 18,
+        title: 'Patagonia: Don\'t Buy This Jacket',
+        type: null,
+        image: 'https://images.unsplash.com/photo-1501555088652-021faa106b9b?w=400&h=500&fit=crop',
+        rating: '4.9',
+        votes: '289K',
+        tags: ['Sustainable', 'Environmental'],
+        genre: 'Documentary'
+      }
+    ]
+  };
+
+  // Get ads based on category
+  const ads = categoryAds[category] || categoryAds.recommended;
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -80,6 +397,13 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ category }) => {
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
       });
+    }
+  };
+
+  // Handle card click
+  const handleCardClick = (ad: any) => {
+    if (onCardClick) {
+      onCardClick(ad);
     }
   };
 
@@ -98,7 +422,9 @@ const AdCarousel: React.FC<AdCarouselProps> = ({ category }) => {
         style={{ scrollbarWidth: 'none' }}
       >
         {ads.map((ad) => (
-          <AdCard key={ad.id} ad={ad} />
+          <div key={ad.id} onClick={() => handleCardClick(ad)}>
+            <AdCard ad={ad} />
+          </div>
         ))}
       </div>
 

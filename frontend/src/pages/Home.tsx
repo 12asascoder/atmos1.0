@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import Navigation from '../components/Navigation';
 import HeroBanner from '../components/HeroBanner';
 import AdCarousel from '../components/AdCarousel';
-import AdDetailModal from '../components/AdDetailModal'; // Add this import
+import AdDetailModal from '../components/AdDetailModal';
 import QuickFilters from '../components/QuickFilters';
-import { colors } from '../styles/colors';
 import Footer from '../components/Footer';
 
 const Home: React.FC = () => {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [selectedAd, setSelectedAd] = useState<any>(null); // Track selected ad
-  const [relatedAds, setRelatedAds] = useState<any[]>([]); // Related ads based on genre
+  const [selectedAd, setSelectedAd] = useState<any>(null);
+  const [relatedAds, setRelatedAds] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('recommended');
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -20,85 +20,56 @@ const Home: React.FC = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Sample data for related ads based on genre
+  // Sample data for all ads
   const allAds = [
+    // Sports ads
     {
-      id: 1,
-      title: 'Emotional / Storytelling Ads',
+      id: 101,
+      title: 'Nike: Just Do It Campaign',
       type: 'PROMOTED',
-      image: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=400&h=500&fit=crop',
-      rating: '4.8',
-      votes: '234K',
-      tags: ['Digital', 'Social'],
-      genre: 'Drama'
-    },
-    {
-      id: 2,
-      title: 'Humorous / Comedy Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=500&fit=crop',
-      rating: '4.6',
-      votes: '189K',
-      tags: ['Video', 'Display'],
-      genre: 'Comedy'
-    },
-    {
-      id: 3,
-      title: 'Informative / Educational Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=400&h=500&fit=crop',
+      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=500&fit=crop',
       rating: '4.9',
-      votes: '312K',
-      tags: ['Social', 'Influencer'],
-      genre: 'Documentary'
+      votes: '256K',
+      tags: ['Athletic', 'Motivational'],
+      genre: 'Sports'
     },
+    // Food ads
     {
-      id: 4,
-      title: 'Lifestyle Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=500&fit=crop',
+      id: 201,
+      title: "McDonald's: I'm Lovin' It",
+      type: 'PROMOTED',
+      image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=500&fit=crop',
+      rating: '4.6',
+      votes: '298K',
+      tags: ['Fast Food', 'Family'],
+      genre: 'Food'
+    },
+    // Fashion ads
+    {
+      id: 301,
+      title: 'Zara: Fast Fashion Leader',
+      type: 'PROMOTED',
+      image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=500&fit=crop',
       rating: '4.7',
-      votes: '267K',
-      tags: ['Email', 'Digital'],
-      genre: 'Lifestyle'
-    },
-    {
-      id: 5,
-      title: 'Aspirational / Luxury Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=500&fit=crop',
-      rating: '4.5',
-      votes: '198K',
-      tags: ['Social', 'Video'],
-      genre: 'Luxury'
-    },
-    {
-      id: 6,
-      title: 'User-Generated Content (UGC) Ads',
-      type: null,
-      image: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?w=400&h=500&fit=crop',
-      rating: '4.8',
       votes: '289K',
-      tags: ['Display', 'Retargeting'],
-      genre: 'UGC'
-    }
+      tags: ['Trendy', 'Affordable'],
+      genre: 'Fashion'
+    },
+    // ... other ads
   ];
 
   const handleCardClick = (ad: any) => {
-  setSelectedAd(ad);
-  
-  // Get example ads for this genre (these would come from your backend/API)
-  // For now, we'll filter from allAds and take top 3 by rating
-  const filtered = allAds
-    .filter(item => item.genre === ad.genre && item.id !== ad.id)
-    .sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating))
-    .slice(0, 3);
-  
-  setRelatedAds(filtered);
-  
-  // Prevent body scroll when modal is open
-  document.body.style.overflow = 'hidden';
-};
+    setSelectedAd(ad);
+    
+    // Get related ads based on genre
+    const filtered = allAds
+      .filter(item => item.genre === ad.genre && item.id !== ad.id)
+      .sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating))
+      .slice(0, 3);
+    
+    setRelatedAds(filtered);
+    document.body.style.overflow = 'hidden';
+  };
 
   const handleCloseModal = () => {
     setSelectedAd(null);
@@ -107,7 +78,6 @@ const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
-      {/* Navigation */}
       <Navigation />
       
       {/* Subtle Background Effects */}
@@ -122,18 +92,64 @@ const Home: React.FC = () => {
         />
       </div>
 
-      {/* Hero Banner */}
       <HeroBanner />
 
-      {/* Quick Filters */}
-      <QuickFilters />
+      {/* Quick Filters with category selection */}
+      <div className="px-6 py-8 max-w-7xl mx-auto">
+        <h3 className="text-2xl font-bold text-gray-900 mb-6">Browse by Category</h3>
+        <div className="flex flex-wrap gap-4 mb-8">
+          <button
+            onClick={() => setSelectedCategory('sports')}
+            className={`px-6 py-3 rounded-full font-medium transition-all ${
+              selectedCategory === 'sports'
+                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            🏈 Sports
+          </button>
+          <button
+            onClick={() => setSelectedCategory('food')}
+            className={`px-6 py-3 rounded-full font-medium transition-all ${
+              selectedCategory === 'food'
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            🍔 Food
+          </button>
+          <button
+            onClick={() => setSelectedCategory('fashion')}
+            className={`px-6 py-3 rounded-full font-medium transition-all ${
+              selectedCategory === 'fashion'
+                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            👗 Fashion
+          </button>
+          <button
+            onClick={() => setSelectedCategory('recommended')}
+            className={`px-6 py-3 rounded-full font-medium transition-all ${
+              selectedCategory === 'recommended'
+                ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            💫 Recommended
+          </button>
+        </div>
+      </div>
 
-      {/* Recommended Campaigns Section */}
+      {/* Dynamic Category Section */}
       <section className="px-6 py-12 max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-3xl font-bold text-gray-900">
-              Recommended Campaigns
+              {selectedCategory === 'sports' && '🏈 Sports Campaigns'}
+              {selectedCategory === 'food' && '🍔 Food Campaigns'}
+              {selectedCategory === 'fashion' && '👗 Fashion Campaigns'}
+              {selectedCategory === 'recommended' && '💫 Recommended Campaigns'}
             </h2>
             <button className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold">
               See All
@@ -143,7 +159,7 @@ const Home: React.FC = () => {
             </button>
           </div>
           <AdCarousel 
-            category="recommended" 
+            category={selectedCategory as any}
             onCardClick={handleCardClick}
           />
         </div>
@@ -200,7 +216,6 @@ const Home: React.FC = () => {
         />
       )}
 
-      {/* Footer */}
       <Footer />
     </div>
   );
