@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
+import SplashScreen from './components/SplashScreen';
 
 import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
@@ -18,8 +19,17 @@ import BookingPage from './pages/BookingPage';
 import TargetingIntel from './pages/targetingIntel';
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  const handleSplashComplete = () => {
+    setShowSplash(false);
+  };
+
   return (
-    <Router>
+    <>
+      <SplashScreen visible={showSplash} onComplete={handleSplashComplete} duration={1750} />
+      <div style={{ display: showSplash ? 'none' : 'block' }}>
+        <Router>
       <Routes>
         {/* LANDING PAGE - Public route */}
         <Route path="/" element={<Home />} />
@@ -128,6 +138,8 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
+      </div>
+    </>
   );
 }
 
