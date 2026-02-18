@@ -374,22 +374,67 @@ def generate_trend_aware_prompt(base_prompt: str, ad_type: str, campaign_goal: s
 
 def generate_video_prompt(ad_type: str, campaign_goal: str, variation_number: int) -> str:
     """
-    Generate specific video prompts based on variation number
+    Generate specific video prompts based on variation number for continuous sequence
+    Each video is designed to flow seamlessly into the next
     """
+    # Base continuity instruction for all videos
+    continuity_base = "Ensure smooth motion that can flow continuously into subsequent clips."
+    
     video_prompts = [
-        f"""Create a cinematic advertisement-style video.
+        # Video 1: Opening/Introduction - Slow zoom in
+        f"""Create a cinematic opening sequence for an advertisement.
 Campaign goal: {campaign_goal}.
 Product type: {ad_type}.
-Preserve the product identity and enhance lighting, background, and motion.
-Follow modern advertising trends with smooth animations.
-Cinematic quality, professional lighting, slow motion effects.""",
+Start with a slow, smooth zoom towards the product.
+Gentle camera movement with professional lighting.
+Build anticipation with subtle motion effects.
+End frame should show product in clear focus with slight rotation beginning.
+{continuity_base}
+Cinematic quality, professional lighting, establish the scene.""",
         
-        f"""Generate an engaging promotional video.
+        # Video 2: Product Rotation - Continue from zoom
+        f"""Continue the advertisement with smooth product rotation.
 Campaign goal: {campaign_goal}.
 Product type: {ad_type}.
-Focus on product showcase with dynamic camera movements.
-Include subtle motion effects and professional transitions.
-Modern advertising style with attention-grabbing visuals."""
+Begin with product in focus, continue the rotation motion smoothly.
+Showcase product details with 360-degree view.
+Dynamic lighting that highlights key features.
+End with product facing forward, ready for feature highlight.
+{continuity_base}
+Modern advertising style with attention-grabbing movements.""",
+        
+        # Video 3: Feature Showcase - Dynamic angles
+        f"""Continue with dynamic feature showcase sequence.
+Campaign goal: {campaign_goal}.
+Product type: {ad_type}.
+Transition smoothly from previous rotation into close-up details.
+Use elegant camera pans to highlight specific features.
+Professional studio lighting with vibrant colors.
+End with camera pulling back slightly for context.
+{continuity_base}
+High-end commercial quality with sleek presentation.""",
+        
+        # Video 4: Lifestyle Context - Environmental integration
+        f"""Continue into lifestyle and contextual presentation.
+Campaign goal: {campaign_goal}.
+Product type: {ad_type}.
+Smoothly transition from close-up to showing product in use/context.
+Integrate product naturally into an aspirational scene.
+Use warm, inviting lighting and smooth motion.
+End with product positioned for final emphasis.
+{continuity_base}
+Contemporary design with emotional appeal.""",
+        
+        # Video 5: Closing/Impact - Final presentation
+        f"""Create the closing sequence with strong visual impact.
+Campaign goal: {campaign_goal}.
+Product type: {ad_type}.
+Continue from contextual scene into bold, confident product presentation.
+Fast-paced motion with eye-catching final reveal.
+Bold colors and dynamic camera movements.
+End with memorable product positioning and brand emphasis.
+{continuity_base}
+Modern, trendy style perfect for social media - strong finish."""
     ]
     
     # Return the appropriate prompt based on variation number
@@ -503,28 +548,32 @@ def generate_assets():
         
         logger.info(f"Starting {asset_type} generation for campaign: {campaign_id}, ad_type: {ad_type}")
         
-        # Generate ONLY 2 variations (as requested)
-        num_variations = 2
+        # Check if Runway API key is configured
+        if not RUNWAY_API_KEY or RUNWAY_API_KEY == 'your_runway_api_key_here':
+            logger.error("❌ Runway API key not configured!")
+            return jsonify({
+                "success": False, 
+                "error": "Runway API key not configured. Please set RUNWAY_API_KEY environment variable."
+            }), 500
         
-        # Check if assets already generated
+        # Generate 5 variations to provide more options
+        num_variations = 5
+        logger.info(f"🎯 Target: {num_variations} {asset_type} variations")
+        
+        # Clear any existing assets of this type to start fresh
         if 'generated_assets' in campaign:
-            # Count existing assets of this type
-            existing_count = len([a for a in campaign['generated_assets'] if a.get('type') == asset_type])
-            if existing_count >= num_variations:
-                return jsonify({
-                    "success": True,
-                    "message": f"Already generated {existing_count} {asset_type} assets",
-                    "task_ids": [],
-                    "campaign_id": campaign_id,
-                    "asset_type": asset_type,
-                    "variations": existing_count,
-                    "note": "Use GET /api/get-generated-assets to retrieve existing assets"
-                }), 200
+            existing_assets = [a for a in campaign['generated_assets'] if a.get('type') == asset_type]
+            existing_count = len(existing_assets)
+            if existing_count > 0:
+                logger.info(f"🔄 Clearing {existing_count} existing {asset_type} assets to generate fresh set")
+                campaign['generated_assets'] = [a for a in campaign['generated_assets'] if a.get('type') != asset_type]
         
         task_ids = []
         
+        logger.info(f"📝 Starting loop to create {num_variations} tasks...")
         for i in range(num_variations):
             try:
+                logger.info(f"🔄 Creating task {i+1}/{num_variations}...")
                 if asset_type == 'image':
                     # Generate trend-aware prompt for images
                     base_prompt = f"Create a professional advertisement background for {ad_type}. Campaign goal: {campaign_goal}. Use modern, clean design with the product placed naturally."
@@ -573,24 +622,35 @@ def generate_assets():
                 generation_tasks[campaign_id].append(task_info)
                 
                 task_ids.append(task_id)
-                logger.info(f"Created {asset_type} generation task {i+1}: {task_id}")
+                logger.info(f"✅ Created {asset_type} generation task {i+1}/{num_variations}: {task_id}")
+                logger.info(f"📊 Total tasks created so far: {len(task_ids)}")
                 
                 # Add small delay between task creation
                 if i < num_variations - 1:
                     time.sleep(1)
                     
             except Exception as e:
-                logger.error(f"Failed to create variation {i+1}: {e}")
+                logger.error(f"❌ Failed to create variation {i+1}/{num_variations}: {str(e)}")
+                logger.error(f"❌ Error type: {type(e).__name__}")
+                import traceback
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                logger.error(f"📊 Continuing with remaining tasks. Current task count: {len(task_ids)}")
                 # Continue with other variations even if one fails
         
+        logger.info(f"🎬 Finished task creation loop. Total tasks created: {len(task_ids)}/{num_variations}")
+        
         if not task_ids:
+            logger.error("⚠️ No tasks were created successfully!")
             return jsonify({"success": False, "error": "Failed to create any generation tasks"}), 500
+        
+        logger.info(f"✅ Successfully created {len(task_ids)} tasks")
         
         # Update campaign status
         campaign['status'] = f'generating_{asset_type}'
         tasks_store[campaign_id] = campaign
         
         logger.info(f"Started {len(task_ids)} {asset_type} generation tasks for campaign: {campaign_id}")
+        logger.info(f"🚀 Returning response with {len(task_ids)} task_ids: {task_ids}")
         
         return jsonify({
             "success": True,
@@ -600,12 +660,19 @@ def generate_assets():
             "asset_type": asset_type,
             "variations": len(task_ids),  # Actual number of tasks created
             "estimated_time": "2-5 minutes per video" if asset_type == 'video' else "1-3 minutes per image",
-            "note": f"Generating {len(task_ids)} {asset_type}s only. They will appear one at a time as they're generated."
+            "note": f"Generating {len(task_ids)} {asset_type}s. They will appear one at a time as they're generated. All {len(task_ids)} will be available for download."
         }), 200
         
     except Exception as e:
-        logger.error(f"Error generating assets: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"❌ Error generating assets: {str(e)}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+        return jsonify({
+            "success": False, 
+            "error": str(e),
+            "error_type": type(e).__name__
+        }), 500
 
 @creative_assets_bp.route('/api/check-status/<task_id>', methods=['GET', 'OPTIONS'])
 def check_status(task_id: str):

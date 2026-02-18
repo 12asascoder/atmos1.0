@@ -1,6 +1,6 @@
 // CreativeAssetsStep.tsx - Fixed version with immediate display and no duplicates
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Sparkles, Download, Heart, Upload, X, Camera, Image as ImageIcon, Loader, Video, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Sparkles, Download, Heart, X, Camera, Image as ImageIcon, Loader, Video, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface CreativeAssetsStepProps {
@@ -42,9 +42,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [generatedAssets, setGeneratedAssets] = useState<GeneratedAsset[]>([]);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
-  const [currentPrompt, setCurrentPrompt] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [adTypeInput, setAdTypeInput] = useState<string>('');
@@ -52,7 +50,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
   const [generationMode, setGenerationMode] = useState<GenerationMode>(null);
   const [campaignId, setCampaignId] = useState<string>('');
   const [activeTasks, setActiveTasks] = useState<GenerationTask[]>([]);
-  const [pollingIntervals, setPollingIntervals] = useState<NodeJS.Timeout[]>([]);
+  const [pollingIntervals, setPollingIntervals] = useState<ReturnType<typeof setInterval>[]>([]);
   const [completedCount, setCompletedCount] = useState(0);
   const [totalTasks, setTotalTasks] = useState(0);
   const [assetIdCounter, setAssetIdCounter] = useState(1);
@@ -87,7 +85,6 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
   // Reset states when changing generation mode
   const resetStates = useCallback(() => {
     setUploadedImage(null);
-    setUploadedFile(null);
     setHasGenerated(false);
     setGeneratedAssets([]);
     setGenerationProgress(0);
@@ -109,9 +106,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setUploadedFile(file);
-
+    if (file?.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = async (e) => {
         const result = e.target?.result as string;
@@ -187,7 +182,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     setGenerationProgress(0);
     setGenerationStatus(`Starting ${assetType} generation...`);
     setCompletedCount(0);
-    setTotalTasks(2); // Always generate exactly 2 images/videos
+    setTotalTasks(5); // Always generate exactly 5 images/videos
     setGeneratedAssets([]);
     setHasGenerated(false);
     seenTaskIds.current.clear(); // Clear seen task IDs
@@ -217,6 +212,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
         // If tasks already exist, use them
         const taskIds = data.task_ids || [];
         console.log(`✓ Starting ${taskIds.length} ${assetType} generations...`);
+        console.log('📋 Task IDs received from backend:', taskIds);
         
         // Create task objects for tracking
         const newTasks: GenerationTask[] = taskIds.map((taskId: string, index: number) => ({
@@ -228,7 +224,9 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
           variation_number: index + 1
         }));
         
+        console.log('📝 Created task objects:', newTasks.length, newTasks);
         setActiveTasks(newTasks);
+        console.log('✅ Set active tasks to:', newTasks.length, 'tasks');
         
         // Start polling for each task immediately
         taskIds.forEach((taskId: string, index: number) => {
@@ -319,8 +317,10 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
             
             // Sort by variation number to maintain order
             return newAssets.sort((a, b) => {
-              const aNum = parseInt(a.title.match(/\d+/)?.[0] || '0');
-              const bNum = parseInt(b.title.match(/\d+/)?.[0] || '0');
+              const aMatch = /\d+/.exec(a.title);
+              const bMatch = /\d+/.exec(b.title);
+              const aNum = Number.parseInt(aMatch?.[0] || '0', 10);
+              const bNum = Number.parseInt(bMatch?.[0] || '0', 10);
               return aNum - bNum;
             });
           });
@@ -388,14 +388,12 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     }
   };
 
-  const clearPollingIntervalForTask = (taskId: string) => {
+  const clearPollingIntervalForTask = (_taskId: string) => {
+    // Note: _taskId is prefixed with underscore to indicate it's intentionally unused
+    // We can't directly identify which interval belongs to which task
+    // So we'll let them run but they'll skip processing if task is seen
     setPollingIntervals(prev => {
-      const remainingIntervals = prev.filter(interval => {
-        // We can't directly identify which interval belongs to which task
-        // So we'll let them run but they'll skip processing if task is seen
-        return true;
-      });
-      return remainingIntervals;
+      return prev.filter(() => true);
     });
   };
 
@@ -474,8 +472,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     e.stopPropagation();
 
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setUploadedFile(file);
+    if (file?.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
@@ -506,7 +503,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
       link.download = title || 'generated-asset';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
     } catch (error) {
       console.error('Error downloading asset:', error);
       alert('Failed to download asset');
@@ -574,7 +571,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     setIsGenerating(true);
     setGenerationProgress(0);
     setGenerationStatus('Starting test generation...');
-    setTotalTasks(2); // Only 2 images as requested
+    setTotalTasks(5); // Generate 5 images for testing
     setCompletedCount(0);
     setGeneratedAssets([]);
     setHasGenerated(false);
@@ -583,7 +580,10 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
     // Create placeholder processing tasks
     const testTasks: GenerationTask[] = [
       { task_id: 'test_1', asset_type: 'image', status: 'processing', estimated_time: '1 minute', variation_number: 1 },
-      { task_id: 'test_2', asset_type: 'image', status: 'processing', estimated_time: '1 minute', variation_number: 2 }
+      { task_id: 'test_2', asset_type: 'image', status: 'processing', estimated_time: '1 minute', variation_number: 2 },
+      { task_id: 'test_3', asset_type: 'image', status: 'processing', estimated_time: '1 minute', variation_number: 3 },
+      { task_id: 'test_4', asset_type: 'image', status: 'processing', estimated_time: '1 minute', variation_number: 4 },
+      { task_id: 'test_5', asset_type: 'image', status: 'processing', estimated_time: '1 minute', variation_number: 5 }
     ];
     
     setActiveTasks(testTasks);
@@ -614,6 +614,45 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
         asset_type: 'image' as const,
         task_id: 'test_2',
         filename: 'generated_image_2.png',
+        status: 'completed' as const
+      },
+      {
+        id: 3,
+        title: 'AI Generated Image 3',
+        image_url: 'https://picsum.photos/800/600?random=3',
+        data_uri: 'https://picsum.photos/800/600?random=3',
+        prompt: 'Dynamic layout with vibrant colors',
+        score: 90,
+        type: 'ai_generated_image',
+        asset_type: 'image' as const,
+        task_id: 'test_3',
+        filename: 'generated_image_3.png',
+        status: 'completed' as const
+      },
+      {
+        id: 4,
+        title: 'AI Generated Image 4',
+        image_url: 'https://picsum.photos/800/600?random=4',
+        data_uri: 'https://picsum.photos/800/600?random=4',
+        prompt: 'Elegant composition with shadows',
+        score: 85,
+        type: 'ai_generated_image',
+        asset_type: 'image' as const,
+        task_id: 'test_4',
+        filename: 'generated_image_4.png',
+        status: 'completed' as const
+      },
+      {
+        id: 5,
+        title: 'AI Generated Image 5',
+        image_url: 'https://picsum.photos/800/600?random=5',
+        data_uri: 'https://picsum.photos/800/600?random=5',
+        prompt: 'Bold advertising style with motion',
+        score: 94,
+        type: 'ai_generated_image',
+        asset_type: 'image' as const,
+        task_id: 'test_5',
+        filename: 'generated_image_5.png',
         status: 'completed' as const
       }
     ];
@@ -647,7 +686,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
         if (index === mockImages.length - 1) {
           setTimeout(() => {
             setIsGenerating(false);
-            setGenerationStatus('Test completed! 2 images generated.');
+            setGenerationStatus('Test completed! 5 images generated.');
           }, 500);
         }
       }, index * 1000); // Show each image 1 second apart
@@ -695,7 +734,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                   </div>
                   <div className="flex items-center gap-2 text-blue-600">
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <span>Generate exactly 2 unique images</span>
+                    <span>Generate exactly 5 unique images</span>
                   </div>
                 </div>
                 <button className="mt-8 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-cyan-700 transition-all">
@@ -732,7 +771,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                   </div>
                   <div className="flex items-center gap-2 text-purple-600">
                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    <span>Generate exactly 2 unique videos</span>
+                    <span>Generate exactly 5 unique videos</span>
                   </div>
                 </div>
                 <button className="mt-8 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all">
@@ -841,7 +880,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                   />
 
                   {/* Test button for development */}
-                  {process.env.NODE_ENV === 'development' && (
+                  {import.meta.env.DEV && (
                     <button
                       onClick={handleTestGeneration}
                       className="mt-6 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm transition-colors"
@@ -885,7 +924,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                     {/* Upload Details */}
                     <div className="flex-1">
                       <h3 className="text-xl font-bold text-slate-800 mb-4">
-                        Ready to Generate 2 {generationMode === 'image' ? 'Images' : 'Videos'}!
+                        Ready to Generate 5 {generationMode === 'image' ? 'Images' : 'Videos'}!
                       </h3>
 
                       {selectedGoal && (
@@ -894,7 +933,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                             Campaign Goal: <span className="font-bold capitalize">{selectedGoal}</span>
                           </p>
                           <p className="text-blue-600 text-sm mt-1">
-                            AI will generate 2 unique {generationMode === 'image' ? 'images' : 'videos'} optimized for {selectedGoal} campaigns
+                            AI will generate 5 unique {generationMode === 'image' ? 'images' : 'videos'} optimized for {selectedGoal} campaigns
                           </p>
                         </div>
                       )}
@@ -997,7 +1036,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                           </div>
                           <div className="p-4 bg-slate-50 rounded-xl">
                             <p className="text-slate-600 text-sm mb-1">Total Variations</p>
-                            <p className="font-semibold text-slate-800">2 Unique {generationMode === 'image' ? 'Images' : 'Videos'}</p>
+                            <p className="font-semibold text-slate-800">5 Unique {generationMode === 'image' ? 'Images' : 'Videos'}</p>
                           </div>
                         </div>
                       </div>
@@ -1016,7 +1055,7 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                           ) : (
                             <>
                               <Sparkles className="w-5 h-5" />
-                              Generate 2 AI {generationMode === 'image' ? 'Images' : 'Videos'}
+                              Generate AI {generationMode === 'image' ? 'Images' : 'Videos'}
                             </>
                           )}
                         </button>
@@ -1074,12 +1113,12 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                       className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${generationMode === 'image' ? 'from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700' : 'from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700'} text-white font-semibold transition-all shadow-md disabled:opacity-50`}
                     >
                       <Sparkles className="w-5 h-5" />
-                      Generate 2 More
+                      Generate More {generationMode === 'image' ? 'Images' : 'Videos'}
                     </button>
                   )}
                   
                   {/* Test button for development */}
-                  {process.env.NODE_ENV === 'development' && (
+                  {import.meta.env.DEV && (
                     <button
                       onClick={handleTestGeneration}
                       className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold transition-all shadow-md"
@@ -1202,7 +1241,10 @@ const CreativeAssetsStep: React.FC<CreativeAssetsStepProps> = ({ selectedGoal, s
                         </p>
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-slate-500 capitalize">
-                            Variation {asset.title.match(/\d+/)?.[0] || '1'}
+                            Variation {(() => {
+                              const match = /\d+/.exec(asset.title);
+                              return match?.[0] || '1';
+                            })()}
                           </span>
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             asset.asset_type === 'image' 
