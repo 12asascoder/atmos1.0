@@ -71,7 +71,7 @@ python main.py
 ```
 cd backend\app\api\commandCenter
 
-python main.py
+python main.py 
 ```
 
 

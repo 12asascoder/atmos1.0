@@ -77,7 +77,7 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+    <div className="min-h-screen bg-black">
       <Navigation />
       
       {/* Subtle Background Effects */}
@@ -96,14 +96,14 @@ const Home: React.FC = () => {
 
       {/* Quick Filters with category selection */}
       <div className="px-6 py-8 max-w-7xl mx-auto">
-        <h3 className="text-2xl font-bold text-gray-900 mb-6">Browse by Category</h3>
+        <h3 className="text-2xl font-bold text-gray-200 mb-6">Browse by Category</h3>
         <div className="flex flex-wrap gap-4 mb-8">
           <button
             onClick={() => setSelectedCategory('sports')}
             className={`px-6 py-3 rounded-full font-medium transition-all ${
               selectedCategory === 'sports'
                 ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-100 text-gray-900 hover:bg-gray-900'
             }`}
           >
             🏈 Sports
@@ -113,7 +113,7 @@ const Home: React.FC = () => {
             className={`px-6 py-3 rounded-full font-medium transition-all ${
               selectedCategory === 'food'
                 ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
             }`}
           >
             🍔 Food
@@ -123,7 +123,7 @@ const Home: React.FC = () => {
             className={`px-6 py-3 rounded-full font-medium transition-all ${
               selectedCategory === 'fashion'
                 ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
             }`}
           >
             👗 Fashion
@@ -133,7 +133,7 @@ const Home: React.FC = () => {
             className={`px-6 py-3 rounded-full font-medium transition-all ${
               selectedCategory === 'recommended'
                 ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
             }`}
           >
             💫 Recommended
@@ -145,7 +145,7 @@ const Home: React.FC = () => {
       <section className="px-6 py-12 max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900">
+            <h2 className="text-3xl font-bold text-gray-200">
               {selectedCategory === 'sports' && '🏈 Sports Campaigns'}
               {selectedCategory === 'food' && '🍔 Food Campaigns'}
               {selectedCategory === 'fashion' && '👗 Fashion Campaigns'}
@@ -169,7 +169,7 @@ const Home: React.FC = () => {
       <section className="px-6 py-12 max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900">
+            <h2 className="text-3xl font-bold text-gray-200">
               Trending Now
             </h2>
             <button className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold">
@@ -190,7 +190,7 @@ const Home: React.FC = () => {
       <section className="px-6 py-12 max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900">
+            <h2 className="text-3xl font-bold text-gray-200">
               Top Performers
             </h2>
             <button className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold">

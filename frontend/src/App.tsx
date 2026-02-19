@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import SplashScreen from './components/SplashScreen';
+
+import AnimatedTileGrid from './components/AnimatedTileGrid';
 
 import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
@@ -13,7 +15,6 @@ import AdSurveillance from './components/AdSurveillance';
 import AdDetailPage from './pages/AdDetailPage';
 import VideoAnalysis from './pages/VideoAnalysis';
 import BookingPage from './pages/BookingPage';
-
 
 /* ✅ NEW PAGE IMPORT */
 import TargetingIntel from './pages/targetingIntel';
@@ -28,116 +29,114 @@ function App() {
   return (
     <>
       <SplashScreen visible={showSplash} onComplete={handleSplashComplete} duration={1750} />
+
       <div style={{ display: showSplash ? 'none' : 'block' }}>
         <Router>
-      <Routes>
-        {/* LANDING PAGE - Public route */}
-        <Route path="/" element={<Home />} />
+          <Routes>
 
-        {/* Ad Detail Page */}
-        <Route path="/ads/:id" element={<AdDetailPage />} />
+            {/* Ad Detail Page */}
+            <Route path="/ads/:id" element={<AdDetailPage />} />
 
-        {/* PUBLIC ROUTES */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
+            {/* PUBLIC ROUTES */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <LoginPage />
+                </PublicRoute>
+              }
+            />
 
-        <Route
-          path="/sign-up"
-          element={
-            <PublicRoute>
-              <SignUpPage />
-            </PublicRoute>
-          }
-        />
+            <Route
+              path="/sign-up"
+              element={
+                <PublicRoute>
+                  <SignUpPage />
+                </PublicRoute>
+              }
+            />
 
+            <Route 
+              path="/video-analysis" 
+              element={
+                <ProtectedRoute>
+                  <VideoAnalysis />
+                </ProtectedRoute>
+              } 
+            />
 
-        <Route 
-          path="/video-analysis" 
-          element={
-            <ProtectedRoute>
-              <VideoAnalysis />
-            </ProtectedRoute>
-          } 
-        />
+            {/* ONBOARDING ROUTE */}
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <OnboardingPage />
+                </ProtectedRoute>
+              }
+            />
 
+            {/* PROTECTED ROUTES */}
+            <Route
+              path="/command-center"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* ONBOARDING ROUTE */}
-        <Route
-          path="/onboarding"
-          element={
-            <ProtectedRoute>
-              <OnboardingPage />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/booking"
+              element={
+                <ProtectedRoute>
+                  <BookingPage />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* PROTECTED ROUTES */}
-        <Route
-          path="/command-center"
-          element={
-            <ProtectedRoute>
-              <CommandCenter />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/booking"
-          element={
-            <ProtectedRoute>
-              <BookingPage />
-            </ProtectedRoute>
-          }
-        />
+            {/* Alias */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* Alias */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <CommandCenter />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/auto-create"
+              element={
+                <ProtectedRoute>
+                  <AutoCreate />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/auto-create"
-          element={
-            <ProtectedRoute>
-              <AutoCreate />
-            </ProtectedRoute>
-          }
-        />
+            {/* Ad Surveillance */}
+            <Route
+              path="/ad-surveillance"
+              element={
+                <ProtectedRoute>
+                  <AdSurveillance />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* Ad Surveillance */}
-        <Route
-          path="/ad-surveillance"
-          element={
-            <ProtectedRoute>
-              <AdSurveillance />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/targeting_intel"
+              element={
+                <ProtectedRoute>
+                  <TargetingIntel />
+                </ProtectedRoute>
+              }
+            />
 
-        
-        <Route
-          path="/targeting_intel"
-          element={
-            <ProtectedRoute>
-              <TargetingIntel />
-            </ProtectedRoute>
-          }
-        />
+            {/* FALLBACK */}
+            <Route path="*" element={<Navigate to="/" replace />} />
 
-        {/* FALLBACK */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+          </Routes>
+        </Router>
       </div>
     </>
   );
