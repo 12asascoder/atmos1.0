@@ -46,7 +46,7 @@ yarn dev
 
 ### Terminal 2
 ```
-cd backend\ados-backend\authservice>
+cd .\backend\ados-backend\ados-backend\auth-service
 
 python auth.py
 ```
@@ -54,14 +54,14 @@ python auth.py
 ### Terminal 3
 
 ```
-cd backend\ados-backend>
+cd backend\ados-backend
 
 uvicorn app:main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Termial 4 
 ```
-cd backend\app\api\autocreate>
+cd backend\app\api\autocreate
 
 python main.py
 ```
@@ -69,7 +69,7 @@ python main.py
 ### Terminal 5 
 
 ```
-cd backend\app\api\commandCenter>
+cd backend\app\api\commandCenter
 
 python main.py
 ```
