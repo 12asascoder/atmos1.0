@@ -109,52 +109,44 @@ const Home: React.FC = () => {
 
      
 
-      {/* Quick Filters with category selection */}
-      <div className="px-6 py-8 max-w-7xl mx-auto">
-        <h3 className="text-2xl font-bold text-gray-200 mb-6">Browse by Category</h3>
-        <div className="flex flex-wrap gap-4 mb-8">
-          <button
-            onClick={() => setSelectedCategory('sports')}
-            className={`px-6 py-3 rounded-full font-medium transition-all ${
-              selectedCategory === 'sports'
-                ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-900 hover:bg-gray-900'
-            }`}
-          >
-            🏈 Sports
-          </button>
-          <button
-            onClick={() => setSelectedCategory('food')}
-            className={`px-6 py-3 rounded-full font-medium transition-all ${
-              selectedCategory === 'food'
-                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-            }`}
-          >
-            🍔 Food
-          </button>
-          <button
-            onClick={() => setSelectedCategory('fashion')}
-            className={`px-6 py-3 rounded-full font-medium transition-all ${
-              selectedCategory === 'fashion'
-                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-            }`}
-          >
-            👗 Fashion
-          </button>
-          <button
-            onClick={() => setSelectedCategory('recommended')}
-            className={`px-6 py-3 rounded-full font-medium transition-all ${
-              selectedCategory === 'recommended'
-                ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-lg'
-                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-            }`}
-          >
-            💫 Recommended
-          </button>
-        </div>
-      </div>
+  {/* Figma Neon Category Pills - Always Visible Gradient */}
+<div className="px-6 py-8 max-w-7xl mx-auto">
+  <h3 className="text-2xl font-bold text-gray-200 mb-8">
+    Browse by Category
+  </h3>
+
+  <div className="flex flex-wrap gap-6">
+
+    {[
+      { key: 'recommended', label: 'All Campaigns' },
+      { key: 'sports', label: 'Sports' },
+      { key: 'food', label: 'Food' },
+      { key: 'fashion', label: 'Fashion' },
+      { key: 'recommended', label: 'Recommended' },
+    ].map((cat, i) => (
+      <button
+        key={i}
+        onClick={() => setSelectedCategory(cat.key)}
+        className="
+          relative px-10 py-3 rounded-full font-semibold text-white
+          bg-[#1f1f1f]
+          transition-all duration-300
+          hover:scale-105
+        "
+        style={{
+          background: `
+            linear-gradient(#1f1f1f, #1f1f1f) padding-box,
+            linear-gradient(90deg, #22d3ee, #a855f7, #ec4899) border-box
+          `,
+          border: '2px solid transparent'
+        }}
+      >
+        {cat.label}
+      </button>
+    ))}
+
+  </div>
+</div>
 
       {/* Dynamic Category Section */}
       <section className="px-6 py-12 max-w-7xl mx-auto">
