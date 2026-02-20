@@ -16,6 +16,7 @@ import AdDetailPage from './pages/AdDetailPage';
 import VideoAnalysis from './pages/VideoAnalysis';
 import BookingPage from './pages/BookingPage';
 
+
 /* ✅ NEW PAGE IMPORT */
 import TargetingIntel from './pages/targetingIntel';
 
@@ -70,7 +71,6 @@ function App() {
                 </ProtectedRoute>
               } 
             />
-
             {/* ONBOARDING ROUTE */}
             <Route
               path="/onboarding"
