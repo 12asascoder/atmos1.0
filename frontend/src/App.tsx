@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
+
+/* ✅ IMPORT SPLASH SCREEN */
+import SplashScreen from './components/SplashScreen';
 
 import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
@@ -18,116 +21,130 @@ import BookingPage from './pages/BookingPage';
 import TargetingIntel from './pages/targetingIntel';
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
-    <Router>
-      <Routes>
-        {/* LANDING PAGE - Public route */}
-        <Route path="/" element={<Home />} />
-
-        {/* Ad Detail Page */}
-        <Route path="/ads/:id" element={<AdDetailPage />} />
-
-        {/* PUBLIC ROUTES */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
+    <>
+      {/* ✅ Splash Screen */}
+      {showSplash && (
+        <SplashScreen
+          duration={1000} // keep your current timing
+          onComplete={() => setShowSplash(false)}
         />
+      )}
 
-        <Route
-          path="/sign-up"
-          element={
-            <PublicRoute>
-              <SignUpPage />
-            </PublicRoute>
-          }
-        />
+      {/* ✅ App Routes (only show after splash disappears) */}
+      {!showSplash && (
+        <Router>
+          <Routes>
 
+            {/* LANDING PAGE - Public route */}
+            <Route path="/" element={<Home />} />
 
-        <Route 
-          path="/video-analysis" 
-          element={
-            <ProtectedRoute>
-              <VideoAnalysis />
-            </ProtectedRoute>
-          } 
-        />
+            {/* Ad Detail Page */}
+            <Route path="/ads/:id" element={<AdDetailPage />} />
 
+            {/* PUBLIC ROUTES */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <LoginPage />
+                </PublicRoute>
+              }
+            />
 
-        {/* ONBOARDING ROUTE */}
-        <Route
-          path="/onboarding"
-          element={
-            <ProtectedRoute>
-              <OnboardingPage />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/sign-up"
+              element={
+                <PublicRoute>
+                  <SignUpPage />
+                </PublicRoute>
+              }
+            />
 
-        {/* PROTECTED ROUTES */}
-        <Route
-          path="/command-center"
-          element={
-            <ProtectedRoute>
-              <CommandCenter />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/booking"
-          element={
-            <ProtectedRoute>
-              <BookingPage />
-            </ProtectedRoute>
-          }
-        />
+            <Route 
+              path="/video-analysis" 
+              element={
+                <ProtectedRoute>
+                  <VideoAnalysis />
+                </ProtectedRoute>
+              } 
+            />
+            {/* ONBOARDING ROUTE */}
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <OnboardingPage />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* Alias */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <CommandCenter />
-            </ProtectedRoute>
-          }
-        />
+            {/* PROTECTED ROUTES */}
+            <Route
+              path="/command-center"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
 
-        <Route
-          path="/auto-create"
-          element={
-            <ProtectedRoute>
-              <AutoCreate />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/booking"
+              element={
+                <ProtectedRoute>
+                  <BookingPage />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* Ad Surveillance */}
-        <Route
-          path="/ad-surveillance"
-          element={
-            <ProtectedRoute>
-              <AdSurveillance />
-            </ProtectedRoute>
-          }
-        />
+            {/* Alias */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
 
-        
-        <Route
-          path="/targeting_intel"
-          element={
-            <ProtectedRoute>
-              <TargetingIntel />
-            </ProtectedRoute>
-          }
-        />
+            <Route
+              path="/auto-create"
+              element={
+                <ProtectedRoute>
+                  <AutoCreate />
+                </ProtectedRoute>
+              }
+            />
 
-        {/* FALLBACK */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+            {/* Ad Surveillance */}
+            <Route
+              path="/ad-surveillance"
+              element={
+                <ProtectedRoute>
+                  <AdSurveillance />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/targeting_intel"
+              element={
+                <ProtectedRoute>
+                  <TargetingIntel />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* FALLBACK */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+
+          </Routes>
+        </Router>
+      )}
+    </>
   );
 }
 

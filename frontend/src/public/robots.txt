@@ -1,0 +1,26 @@
+# User-agent: *
+Allow: /
+
+# Disallow private pages
+Disallow: /dashboard/
+Disallow: /profile/
+Disallow: /checkout/
+Disallow: /cart/
+
+# Disallow API routes
+Disallow: /api/
+
+# Disallow auth pages
+Disallow: /auth/
+
+# Allow search engines to crawl public pages
+Allow: /
+Allow: /search
+Allow: /ai-planner
+Allow: /addspace/
+
+# Crawl-delay (optional, adjust based on server capacity)
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://atmos.com/sitemap.xml
