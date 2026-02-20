@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
-import SplashScreen from './components/SplashScreen';
 
-import AnimatedTileGrid from './components/AnimatedTileGrid';
+/* ✅ IMPORT SPLASH SCREEN */
+import SplashScreen from './components/SplashScreen';
 
 import CommandCenter from './pages/CommandCenter';
 import LoginPage from './pages/Login';
@@ -22,17 +22,23 @@ import TargetingIntel from './pages/targetingIntel';
 function App() {
   const [showSplash, setShowSplash] = useState(true);
 
-  const handleSplashComplete = () => {
-    setShowSplash(false);
-  };
-
   return (
     <>
-      <SplashScreen visible={showSplash} onComplete={handleSplashComplete} duration={1750} />
+      {/* ✅ Splash Screen */}
+      {showSplash && (
+        <SplashScreen
+          duration={1000} // keep your current timing
+          onComplete={() => setShowSplash(false)}
+        />
+      )}
 
-      <div style={{ display: showSplash ? 'none' : 'block' }}>
+      {/* ✅ App Routes (only show after splash disappears) */}
+      {!showSplash && (
         <Router>
           <Routes>
+
+            {/* LANDING PAGE - Public route */}
+            <Route path="/" element={<Home />} />
 
             {/* Ad Detail Page */}
             <Route path="/ads/:id" element={<AdDetailPage />} />
@@ -137,7 +143,7 @@ function App() {
 
           </Routes>
         </Router>
-      </div>
+      )}
     </>
   );
 }
