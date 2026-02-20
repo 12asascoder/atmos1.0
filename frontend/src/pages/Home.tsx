@@ -77,7 +77,10 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black">
+    <div 
+  className="min-h-screen bg-black"
+  style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+>
       <Navigation />
       
       {/* Subtle Background Effects */}
@@ -111,9 +114,12 @@ const Home: React.FC = () => {
 
   {/* Figma Neon Category Pills - Always Visible Gradient */}
 <div className="px-6 py-8 max-w-7xl mx-auto">
-  <h3 className="text-2xl font-bold text-gray-200 mb-8">
-    Browse by Category
-  </h3>
+  <h3
+  className="text-gray-100 mb-8 text-[48px] font-semibold leading-[1] tracking-[-0.03em]"
+  style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+>
+  Browse by Category
+</h3>
 
   <div className="flex flex-wrap gap-6">
 
@@ -148,71 +154,114 @@ const Home: React.FC = () => {
   </div>
 </div>
 
-      {/* Dynamic Category Section */}
-      <section className="px-6 py-12 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-200">
-              {selectedCategory === 'sports' && '🏈 Sports Campaigns'}
-              {selectedCategory === 'food' && '🍔 Food Campaigns'}
-              {selectedCategory === 'fashion' && '👗 Fashion Campaigns'}
-              {selectedCategory === 'recommended' && '💫 Recommended Campaigns'}
-            </h2>
-            <button className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold">
-              See All
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          <AdCarousel 
-            category={selectedCategory as any}
-            onCardClick={handleCardClick}
-          />
-        </div>
-      </section>
+     {/* Dynamic Category Section */}
+<section className="px-6 py-12 max-w-7xl mx-auto">
+  <div className="mb-8">
+    <div className="flex items-center justify-between mb-6">
 
-      {/* Trending Now Section */}
-      <section className="px-6 py-12 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-200">
-              Trending Now
-            </h2>
-            <button className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold">
-              See All
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          <AdCarousel 
-            category="trending" 
-            onCardClick={handleCardClick}
-          />
-        </div>
-      </section>
+      {/* Figma Styled Headline */}
+      <h2
+        className="text-gray-200 text-[48px] font-semibold leading-[1] tracking-[-0.03em]"
+        style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+      >
+        {selectedCategory === 'sports' && 'Sports Campaigns'}
+        {selectedCategory === 'food' && 'Food Campaigns'}
+        {selectedCategory === 'fashion' && 'Fashion Campaigns'}
+        {selectedCategory === 'recommended' && 'Recommended Campaigns'}
+      </h2>
 
-      {/* Top Performers Section */}
-      <section className="px-6 py-12 max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-200">
-              Top Performers
-            </h2>
-            <button className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold">
-              See All
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          <AdCarousel 
-            category="top" 
-            onCardClick={handleCardClick}
+      {/* Figma Styled Action Text */}
+      <button
+        className="flex items-center gap-2 text-[18px] font-semibold text-purple-400 hover:text-purple-300 transition-colors"
+        style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+      >
+        See All
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 5l7 7-7 7"
           />
-        </div>
-      </section>
+        </svg>
+      </button>
+
+    </div>
+
+    <AdCarousel 
+      category={selectedCategory as any}
+      onCardClick={handleCardClick}
+    />
+  </div>
+</section>
+
+     {/* Trending Now Section */}
+<section className="px-6 py-12 max-w-7xl mx-auto">
+  <div className="mb-8">
+    <div className="flex items-center justify-between mb-6">
+
+      <h2
+        className="text-gray-200 text-[48px] font-semibold leading-[1] tracking-[-0.03em]"
+        style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+      >
+        Trending Now
+      </h2>
+
+      <button
+        className="flex items-center gap-2 text-[18px] font-semibold text-purple-400 hover:text-purple-300 transition-colors"
+        style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+      >
+        See All
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+    </div>
+
+    <AdCarousel 
+      category="trending" 
+      onCardClick={handleCardClick}
+    />
+  </div>
+</section>
+
+
+{/* Top Performers Section */}
+<section className="px-6 py-12 max-w-7xl mx-auto">
+  <div className="mb-8">
+    <div className="flex items-center justify-between mb-6">
+
+      <h2
+        className="text-gray-200 text-[48px] font-semibold leading-[1] tracking-[-0.03em]"
+        style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+      >
+        Top Performers
+      </h2>
+
+      <button
+        className="flex items-center gap-2 text-[18px] font-semibold text-purple-400 hover:text-purple-300 transition-colors"
+        style={{ fontFamily: "'Montserrat Alternates', sans-serif" }}
+      >
+        See All
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+    </div>
+
+    <AdCarousel 
+      category="top" 
+      onCardClick={handleCardClick}
+    />
+  </div>
+</section>
 
       {/* Ad Detail Modal */}
       {selectedAd && (
