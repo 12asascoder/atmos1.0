@@ -1,5 +1,3 @@
-import React from "react";
-
 /* ========== SOCIAL ICON IMPORTS ========== */
 import githubIcon from "./SocialIcons/github.svg";
 import linkedinIcon from "./SocialIcons/linkedin.svg";

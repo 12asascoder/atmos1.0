@@ -1,198 +1,129 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  Navbar,
-  NavBody,
-  NavItems,
-  MobileNav,
-  NavbarLogo,
-  NavbarButton,
-  MobileNavHeader,
-  MobileNavToggle,
-  MobileNavMenu,
-} from './ui/resizable-navbar';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import NavbarLogoImg from "./NavbarIcons/Navbar_logo.png";
 
 const Navigation: React.FC = () => {
   const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
-
-  // Check login status from localStorage
-  useEffect(() => {
-    const checkAuthStatus = () => {
-      const token = localStorage.getItem('token');
-      const userStr = localStorage.getItem('user');
-      
-      if (token) {
-        setIsLoggedIn(true);
-        
-        if (userStr) {
-          try {
-            const user = JSON.parse(userStr);
-            setUserName(user.name || user.username || 'User');
-          } catch (error) {
-            console.error('Error parsing user data:', error);
-            setUserName('User');
-          }
-        }
-      } else {
-        setIsLoggedIn(false);
-        setUserName(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem("token");
+  });
+  const [userName, setUserName] = useState<string | null>(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      try {
+        const parsed = JSON.parse(user);
+        return parsed.name || "User";
+      } catch {
+        return null;
       }
-    };
-
-    // Check on mount
-    checkAuthStatus();
-
-    // Listen for storage changes (if user logs in/out in another tab)
-    window.addEventListener('storage', checkAuthStatus);
-    
-    // Listen for custom login event
-    const handleLoginEvent = () => checkAuthStatus();
-    window.addEventListener('userLoggedIn', handleLoginEvent);
-    
-    return () => {
-      window.removeEventListener('storage', checkAuthStatus);
-      window.removeEventListener('userLoggedIn', handleLoginEvent);
-    };
-  }, []);
+    }
+    return null;
+  });
 
   const navItems = [
-    { name: 'Home', link: '/home' },
-    { name: 'Command Center', link: '/command-center' },
-    { name: 'Targeting Intel', link: '/targeting_intel' },
-    { name: 'Ad Surveillance', link: '/ad-surveillance' },
-    { name: 'Auto Create', link: '/auto-create' },
-    { name: 'Reverse Engineering', link: '/video-analysis'}
+    { name: "Home", link: "/home" },
+    { name: "Command Center", link: "/command-center" },
+    { name: "Targeting Intel", link: "/targeting_intel" },
+    { name: "Ad Surveillance", link: "/ad-surveillance" },
+    { name: "Auto Create", link: "/auto-create" },
+    { name: "Reverse Engineering", link: "/video-analysis" }
   ];
 
-  const handleNavClick = (link: string) => {
-    navigate(link);
-    setIsMobileMenuOpen(false);
-  };
-
-  const handleLogout = () => {
-    // Clear localStorage
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    
-    // Update state
-    setIsLoggedIn(false);
-    setUserName(null);
-    setIsMobileMenuOpen(false);
-    
-    // Redirect to home
-    navigate('/');
+  const logout = () => {
+    localStorage.clear();
+    navigate("/");
+    window.location.reload();
   };
 
   return (
-    <Navbar>
-      {/* Desktop Navigation */}
-      <NavBody>
-        <NavbarLogo />
-        {isLoggedIn && (
-          <NavItems 
-            items={navItems} 
-            onItemClick={(link) => navigate(link)}
-          />
-        )}
-        <div className="flex items-center gap-4">
-          {isLoggedIn ? (
-            <>
-              {/* Show user name */}
-              {userName && (
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 hidden md:block font-mulish">
-                  Welcome, {userName}
-                </span>
-              )}
-              <NavbarButton variant="secondary" onClick={handleLogout}>
-                Logout
-              </NavbarButton>
-            </>
-          ) : (
-            <>
-              <NavbarButton 
-                variant="secondary"
-                onClick={() => navigate('login')}
-              >
-                Sign In
-              </NavbarButton>
-              <NavbarButton 
-                variant="gradient"
-                onClick={() => navigate('sign-up')}
-              >
-                Get Started
-              </NavbarButton>
-            </>
-          )}
-        </div>
-      </NavBody>
+    <div className="w-full bg-black px-12 py-6">
 
-      {/* Mobile Navigation */}
-      <MobileNav>
-        <MobileNavHeader>
-          <NavbarLogo />
-          <MobileNavToggle
-            isOpen={isMobileMenuOpen}
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          />
-        </MobileNavHeader>
+      {/* ================= PRE LOGIN ================= */}
+      {!isLoggedIn && (
+        <div className="flex items-center justify-between">
 
-        <MobileNavMenu
-          isOpen={isMobileMenuOpen}
-          onClose={() => setIsMobileMenuOpen(false)}
-        >
-          {navItems.map((item, idx) => (
+          <img
+            src={NavbarLogoImg}
+            className="h-8 object-contain"
+            alt="ELFSOD"
+          />
+
+          <div className="flex gap-4">
             <button
-              key={`mobile-link-${idx}`}
-              onClick={() => handleNavClick(item.link)}
-              className="relative text-neutral-600 dark:text-neutral-300 hover:text-cyan-600 transition-colors text-left w-full"
+              onClick={() => navigate("/sign-up")}
+              className="px-6 py-2 rounded-xl bg-white text-black font-semibold"
             >
-              <span className="block font-medium">{item.name}</span>
+              Sign Up
             </button>
-          ))}
-          
-          {/* Mobile Auth Buttons */}
-          <div className="flex w-full flex-col gap-4 mt-4">
-            {isLoggedIn ? (
-              <>
-                {/* Show user name on mobile */}
-                {userName && (
-                  <div className="text-sm text-neutral-600 dark:text-neutral-300 px-2 py-2 text-center bg-slate-50 rounded-lg font-mulish">
-                    Logged in as <span className="font-semibold text-cyan-600">{userName}</span>
-                  </div>
-                )}
-                <NavbarButton
-                  onClick={handleLogout}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  Logout
-                </NavbarButton>
-              </>
-            ) : (
-              <>
-                <NavbarButton
-                  onClick={() => handleNavClick('/login')}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  Sign In
-                </NavbarButton>
-                <NavbarButton
-                  onClick={() => handleNavClick('/sign-up')}
-                  variant="gradient"
-                  className="w-full"
-                >
-                  Get Started
-                </NavbarButton>
-              </>
-            )}
+
+            <button
+              onClick={() => navigate("/login")}
+              className="px-6 py-2 rounded-xl bg-[#ff5b8d] text-white font-semibold"
+            >
+              Login
+            </button>
           </div>
-        </MobileNavMenu>
-      </MobileNav>
-    </Navbar>
+        </div>
+      )}
+
+      {/* ================= POST LOGIN ================= */}
+      {isLoggedIn && (
+        <>
+          <div className="flex items-center justify-between">
+
+            {/* LOGO */}
+            <img
+              src={NavbarLogoImg}
+              className="h-8 object-contain"
+              alt="ELFSOD"
+            />
+
+            {/* CENTER MENU */}
+            <div className="flex gap-10 text-gray-300 font-medium">
+
+              {navItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => navigate(item.link)}
+                  className={`relative hover:text-white transition ${
+                    item.name === "Home" && "text-white"
+                  }`}
+                >
+                  {item.name}
+
+                  {/* {item.name === "Home" && (
+                    <span className="absolute left-0 -bottom-2 h-[2px] w-full bg-white rounded-full" />
+                  )} */}
+                </button>
+              ))}
+            </div>
+
+            {/* RIGHT SIDE */}
+            <div className="flex items-center gap-4">
+
+              <button
+                onClick={logout}
+                className="px-6 py-2 rounded-full bg-[#1f1f1f] text-white font-semibold"
+              >
+                Logout
+              </button>
+
+              <span className="text-white">
+                Hello, {userName}
+              </span>
+
+              <div className="w-10 h-10 rounded-full bg-gray-400 flex items-center justify-center text-white">
+                👤
+              </div>
+            </div>
+
+          </div>
+
+          {/* BOTTOM LINE */}
+          <div className="mt-6 w-full h-[1px] bg-gray-700 opacity-60" />
+        </>
+      )}
+    </div>
   );
 };
 
