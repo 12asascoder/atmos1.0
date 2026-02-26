@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Eye, Users, Sparkles, ExternalLink, Loader2, AlertTriangle, Target, MessageSquare, Palette, Clock, Heart, Zap, TrendingUp, BarChart3, PlayCircle, Image as ImageIcon, Type, AlertCircle, CheckCircle, XCircle, Percent, Layers, Film, Award } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
+import Navigation from "../components/Navigation";
+import Footer from "../components/Footer";
 
 /* -------------------- Supabase -------------------- */
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hkgcyrheviatmdflbxqu.supabase.co';
@@ -129,9 +131,9 @@ const VideoAnalysis: React.FC = () => {
     : ads.filter(ad => ad.search_keyword === companyFilter);
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-emerald-600";
-    if (score >= 60) return "text-amber-600";
-    return "text-red-600";
+    if (score >= 80) return "text-emerald-400";
+    if (score >= 60) return "text-amber-400";
+    return "text-red-400";
   };
 
   const getScoreBgColor = (score: number) => {
@@ -146,10 +148,10 @@ const VideoAnalysis: React.FC = () => {
         {colors.map((color, index) => (
           <div key={index} className="flex items-center gap-2">
             <div
-              className="w-8 h-8 rounded-full border-2 border-gray-300 shadow-sm"
+              className="w-8 h-8 rounded-full border-2 border-gray-600 shadow-sm"
               style={{ backgroundColor: color }}
             />
-            <span className="text-xs text-gray-600 font-mono">{color}</span>
+            <span className="text-xs text-gray-400 font-mono">{color}</span>
           </div>
         ))}
       </div>
@@ -158,10 +160,10 @@ const VideoAnalysis: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">Loading ads...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-cyan-400 mx-auto mb-4" />
+          <p className="text-gray-400 text-lg">Loading ads...</p>
         </div>
       </div>
     );
@@ -169,52 +171,62 @@ const VideoAnalysis: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-          <p className="text-red-800 text-center">{error}</p>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 max-w-md">
+          <div className="bg-[#0B0F1A] rounded-[32px] p-6">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-gray-300 text-center">{error}</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+    <>
+      <Navigation />
+      
+      <div className="min-h-screen bg-black p-6">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+        <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+          <div className="bg-[#0B0F1A] rounded-[32px] p-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center gap-3">
-                <Sparkles className="text-blue-600" />
+              <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
+                <Sparkles className="text-cyan-400" />
                 Ad Intelligence Dashboard
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-400">
                 Comprehensive analysis of Facebook ads with AI-powered insights
               </p>
             </div>
             <button
               onClick={fetchAds}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg hover:shadow-xl"
+              className="relative rounded-full p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_25px_rgba(168,85,247,0.25)]"
             >
+              <div className="rounded-full bg-gradient-to-r from-[#2c2c2c] to-[#3a3a3a] px-8 py-4 flex items-center gap-2 font-semibold text-white text-center">
               <Refresh className="w-5 h-5" />
               Refresh
+              </div>
             </button>
+          </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
       <div className="max-w-7xl mx-auto mb-6">
-        <div className="bg-white rounded-xl shadow-md p-4 border border-gray-200">
+        <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+          <div className="bg-[#0B0F1A] rounded-[32px] p-4">
           <div className="flex items-center gap-4">
-            <label className="text-gray-700 font-semibold whitespace-nowrap">
+            <label className="text-gray-300 font-semibold whitespace-nowrap">
               Filter by Search Keyword:
             </label>
             <select
               value={companyFilter}
               onChange={(e) => setCompanyFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700 bg-white min-w-[200px]"
+              className="px-4 py-2 border border-gray-700 rounded-[32px] focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 text-gray-300 bg-[#0B0F1A] min-w-[200px]"
             >
               <option value="all">All Keywords ({ads.length} ads)</option>
               {searchKeywords.map((keyword) => (
@@ -224,8 +236,9 @@ const VideoAnalysis: React.FC = () => {
               ))}
             </select>
           </div>
-          <div className="mt-3 text-sm text-gray-600">
+          <div className="mt-3 text-sm text-gray-400">
             Showing {filteredAds.length} ads
+          </div>
           </div>
         </div>
       </div>
@@ -234,9 +247,11 @@ const VideoAnalysis: React.FC = () => {
       {!selectedAd ? (
         <div className="max-w-7xl mx-auto">
           {filteredAds.length === 0 ? (
-            <div className="bg-white rounded-xl p-12 text-center shadow-lg">
+            <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+              <div className="bg-[#0B0F1A] rounded-[32px] p-12 text-center">
               <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 text-lg">No ads found</p>
+              <p className="text-gray-400 text-lg">No ads found</p>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -244,17 +259,12 @@ const VideoAnalysis: React.FC = () => {
                 <button
                   key={ad.id}
                   onClick={() => setSelectedAd(ad)}
-                  className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 hover:shadow-2xl hover:border-blue-300 transition-all text-left group"
+                  className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] transition-all text-left group"
                 >
+                  <div className="bg-[#0B0F1A] rounded-[32px] p-6 h-full">
                   {/* Score Badge */}
                   <div className="flex justify-between items-start mb-4">
-                    <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                      ad.analysis?.scores?.total_score >= 80 
-                        ? 'bg-emerald-100 text-emerald-700' 
-                        : ad.analysis?.scores?.total_score >= 60 
-                        ? 'bg-amber-100 text-amber-700' 
-                        : 'bg-red-100 text-red-700'
-                    }`}>
+                    <span className="px-4 py-2 rounded-full text-lg font-bold bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 bg-clip-text text-transparent">
                       {ad.analysis?.scores?.total_score || 0}
                     </span>
                     <Sparkles className={`w-5 h-5 ${
@@ -264,29 +274,29 @@ const VideoAnalysis: React.FC = () => {
 
                   {/* Company */}
                   <div className="mb-2">
-                    <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">
                       {ad.company}
                     </span>
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-lg font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                  <h3 className="text-lg font-bold text-white mb-3 line-clamp-2 group-hover:text-cyan-400 transition-colors">
                     {ad.ad_title || 'Untitled Ad'}
                   </h3>
 
                   {/* Quick Stats */}
                   <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="bg-gray-50 rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-600 mb-1">Visual Quality</div>
-                      <div className="font-bold text-sm text-gray-900">{ad.analysis?.scores?.visual_score || 0}/100</div>
+                    <div className="bg-black/50 rounded-[32px] p-2 text-center border border-gray-800">
+                      <div className="text-xs text-gray-400 mb-1">Visual Quality</div>
+                      <div className="font-bold text-sm text-white">{ad.analysis?.scores?.visual_score || 0}/100</div>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-600 mb-1">Text Quality</div>
-                      <div className="font-bold text-sm text-gray-900">{ad.analysis?.scores?.text_quality_score || 0}/100</div>
+                    <div className="bg-black/50 rounded-[32px] p-2 text-center border border-gray-800">
+                      <div className="text-xs text-gray-400 mb-1">Text Quality</div>
+                      <div className="font-bold text-sm text-white">{ad.analysis?.scores?.text_quality_score || 0}/100</div>
                     </div>
-                    <div className="bg-gray-50 rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-600 mb-1">CTA Score</div>
-                      <div className="font-bold text-sm text-gray-900">{ad.analysis?.scores?.cta_score || 0}/100</div>
+                    <div className="bg-black/50 rounded-[32px] p-2 text-center border border-gray-800">
+                      <div className="text-xs text-gray-400 mb-1">CTA Score</div>
+                      <div className="font-bold text-sm text-white">{ad.analysis?.scores?.cta_score || 0}/100</div>
                     </div>
                   </div>
 
@@ -313,9 +323,10 @@ const VideoAnalysis: React.FC = () => {
                   </div>
 
                   {/* Meta Info */}
-                  <div className="text-xs text-gray-500 border-t border-gray-200 pt-3">
+                  <div className="text-xs text-gray-500 border-t border-gray-800 pt-3">
                     <div>ID: {ad.ad_archive_id.slice(0, 12)}...</div>
                     <div>{new Date(ad.analyzed_at).toLocaleDateString()}</div>
+                  </div>
                   </div>
                 </button>
               ))}
@@ -328,44 +339,50 @@ const VideoAnalysis: React.FC = () => {
           {/* Back Button */}
           <button
             onClick={() => setSelectedAd(null)}
-            className="mb-6 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-semibold"
+            className="mb-6 rounded-full p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_25px_rgba(168,85,247,0.25)]"
           >
+            <div className="rounded-full bg-gradient-to-r from-[#2c2c2c] to-[#3a3a3a] px-8 py-4 flex items-center gap-2 font-semibold text-white text-center">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back to All Ads
+            </div>
           </button>
 
           {/* Header Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 mb-6 border border-gray-200">
+          <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)] mb-6">
+            <div className="bg-[#0B0F1A] rounded-[32px] p-8">
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
-                <div className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-2">
+                <div className="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-2">
                   {selectedAd.company}
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                <h1 className="text-6xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent mb-2">
                   {selectedAd.ad_title}
                 </h1>
-                <div className="text-sm text-gray-500 space-y-1">
+                <div className="text-sm text-gray-400 space-y-1">
                   <div>ID: {selectedAd.ad_archive_id}</div>
                   <div>{new Date(selectedAd.analyzed_at).toLocaleString()}</div>
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-sm text-gray-600 mb-2">Overall Score</div>
-                <div className={`text-5xl font-bold ${getScoreColor(selectedAd.analysis.scores.total_score)}`}>
+                <div className="text-sm text-gray-400 mb-2">Overall Score</div>
+                <div className="text-5xl font-bold bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 bg-clip-text text-transparent">
                   {selectedAd.analysis.scores.total_score}/100
                 </div>
                 <a
                   href={`https://www.facebook.com/ads/library/?id=${selectedAd.ad_archive_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  className="mt-4 inline-block rounded-full p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_25px_rgba(168,85,247,0.25)]"
                 >
+                  <div className="rounded-full bg-gradient-to-r from-[#2c2c2c] to-[#3a3a3a] px-8 py-4 flex items-center gap-2 text-sm text-white font-semibold text-center">
                   <ExternalLink className="w-4 h-4" />
                   View Original
+                  </div>
                 </a>
               </div>
+            </div>
             </div>
           </div>
 
@@ -399,12 +416,13 @@ const VideoAnalysis: React.FC = () => {
 
           {/* Media Analysis */}
           {selectedAd.analysis.media_analysis.map((media, idx) => (
-            <div key={idx} className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <div key={idx} className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)] mb-6">
+              <div className="bg-[#0B0F1A] rounded-[32px] p-6">
+              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 {media.media_type === 'video' ? (
-                  <Film className="w-6 h-6 text-blue-600" />
+                  <Film className="w-6 h-6 text-cyan-400" />
                 ) : (
-                  <ImageIcon className="w-6 h-6 text-blue-600" />
+                  <ImageIcon className="w-6 h-6 text-cyan-400" />
                 )}
                 {media.media_type.charAt(0).toUpperCase() + media.media_type.slice(1)} Analysis
               </h2>
@@ -423,8 +441,8 @@ const VideoAnalysis: React.FC = () => {
               {/* Color Palette */}
               {media.colors && media.colors.length > 0 && (
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Palette className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Palette className="w-5 h-5 text-cyan-400" />
                     Color Palette
                   </h3>
                   {renderColorPalette(media.colors)}
@@ -434,8 +452,8 @@ const VideoAnalysis: React.FC = () => {
               {/* Pacing Analysis */}
               {media.pacing && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-cyan-400" />
                     Video Pacing Analysis
                   </h3>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -468,39 +486,41 @@ const VideoAnalysis: React.FC = () => {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           ))}
 
           {/* Value Proposition */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Target className="w-6 h-6 text-blue-600" />
+          <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)] mb-6">
+            <div className="bg-[#0B0F1A] rounded-[32px] p-6">
+            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+              <Target className="w-6 h-6 text-cyan-400" />
               Value Proposition Analysis
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className={`p-4 rounded-lg border-2 ${
+              <div className={`p-4 rounded-[32px] border-2 ${
                 selectedAd.analysis.value_proposition.urgency
-                  ? 'bg-red-50 border-red-200'
-                  : 'bg-gray-50 border-gray-200'
+                  ? 'bg-red-950/30 border-red-800'
+                  : 'bg-black/30 border-gray-800'
               }`}>
                 <div className="flex items-center gap-3 mb-2">
                   {selectedAd.analysis.value_proposition.urgency ? (
-                    <CheckCircle className="w-6 h-6 text-red-600" />
+                    <CheckCircle className="w-6 h-6 text-red-500" />
                   ) : (
                     <XCircle className="w-6 h-6 text-gray-400" />
                   )}
-                  <h3 className="text-lg font-semibold text-gray-900">Urgency Detected</h3>
+                  <h3 className="text-lg font-semibold text-white">Urgency Detected</h3>
                 </div>
-                <p className="text-gray-600">
+                <p className="text-gray-400">
                   {selectedAd.analysis.value_proposition.urgency
                     ? "Yes - creates urgency/scarcity"
                     : "No urgency indicators found"}
                 </p>
                 <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
                   selectedAd.analysis.value_proposition.urgency
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-gray-200 text-gray-600'
+                    ? 'bg-red-900/50 text-red-400'
+                    : 'bg-gray-800 text-gray-400'
                 }`}>
                   {selectedAd.analysis.value_proposition.urgency ? (
                     <Zap className="w-4 h-4" />
@@ -511,32 +531,34 @@ const VideoAnalysis: React.FC = () => {
               </div>
 
               {selectedAd.analysis.value_proposition.benefits.length > 0 ? (
-                <div className="p-4 rounded-lg border-2 bg-emerald-50 border-emerald-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Heart className="w-5 h-5 text-emerald-600" />
+                <div className="p-4 rounded-[32px] border-2 bg-emerald-950/30 border-emerald-800">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <Heart className="w-5 h-5 text-emerald-400" />
                     Key Benefits Identified
                   </h3>
                   <ul className="space-y-2">
                     {selectedAd.analysis.value_proposition.benefits.map((benefit, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-gray-700">
-                        <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <li key={idx} className="flex items-start gap-2 text-gray-300">
+                        <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                         <span>{benefit}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               ) : (
-                <div className="p-4 rounded-lg border-2 bg-gray-50 border-gray-200 flex items-center justify-center">
+                <div className="p-4 rounded-[32px] border-2 bg-black/30 border-gray-800 flex items-center justify-center">
                   <p className="text-gray-500 text-center">No clear benefits identified in this ad</p>
                 </div>
               )}
             </div>
+            </div>
           </div>
 
           {/* Influencer Analysis */}
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Users className="w-6 h-6 text-blue-600" />
+          <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)] mb-6">
+            <div className="bg-[#0B0F1A] rounded-[32px] p-6">
+            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+              <Users className="w-6 h-6 text-cyan-400" />
               Influencer Analysis
             </h2>
 
@@ -545,31 +567,31 @@ const VideoAnalysis: React.FC = () => {
                 label="Influencer Detection"
                 value={selectedAd.analysis.has_influencer ? `Found ${selectedAd.analysis.influencer_count} influencer(s)` : "No influencers detected"}
                 icon={Users}
-                className="bg-purple-50 border-purple-200"
+                className="bg-purple-950/30 border-purple-800"
               />
               <MetricCard
                 label="Count"
                 value={selectedAd.analysis.influencer_count}
                 icon={Percent}
-                className="bg-purple-50 border-purple-200"
+                className="bg-purple-950/30 border-purple-800"
               />
             </div>
 
             {selectedAd.analysis.has_influencer && selectedAd.analysis.influencer_names.length > 0 && (
               <div className="mt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Detected Influencers</h3>
+                <h3 className="text-lg font-semibold text-white mb-3">Detected Influencers</h3>
                 <div className="space-y-3">
                   {selectedAd.analysis.influencer_names.map((inf, idx) => (
-                    <div key={idx} className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div key={idx} className="p-4 bg-purple-950/30 rounded-[32px] border border-purple-800">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-bold text-gray-900">{inf.name}</h4>
+                        <h4 className="font-bold text-white">{inf.name}</h4>
                         {inf.is_influencer && (
                           <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-xs font-semibold">
                             INFLUENCER
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-400">
                         Sources: {inf.sources?.join(', ') || 'Unknown'}
                       </p>
                     </div>
@@ -577,48 +599,56 @@ const VideoAnalysis: React.FC = () => {
                 </div>
               </div>
             )}
+            </div>
           </div>
 
           {/* Ad Content */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <MessageSquare className="w-6 h-6 text-blue-600" />
+          <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+            <div className="bg-[#0B0F1A] rounded-[32px] p-6">
+            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+              <MessageSquare className="w-6 h-6 text-cyan-400" />
               Ad Content Analysis
             </h2>
 
             {selectedAd.full_ad_text && (
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Full Ad Text</h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-gray-700 whitespace-pre-wrap">{selectedAd.full_ad_text}</p>
+                <h3 className="text-lg font-semibold text-white mb-2">Full Ad Text</h3>
+                <div className="bg-black/50 p-4 rounded-[32px] border border-gray-800">
+                  <p className="text-gray-300 whitespace-pre-wrap">{selectedAd.full_ad_text}</p>
                 </div>
               </div>
             )}
 
             {selectedAd.ad_text && (
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Primary Text</h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <p className="text-gray-700 whitespace-pre-wrap">{selectedAd.ad_text}</p>
+                <h3 className="text-lg font-semibold text-white mb-2">Primary Text</h3>
+                <div className="bg-black/50 p-4 rounded-[32px] border border-gray-800">
+                  <p className="text-gray-300 whitespace-pre-wrap">{selectedAd.ad_text}</p>
                 </div>
               </div>
             )}
 
             {selectedAd.call_to_action && (
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <Target className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                  <Target className="w-5 h-5 text-cyan-400" />
                   Call to Action
                 </h3>
-                <div className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-bold text-lg shadow-lg">
+                <div className="inline-block rounded-full p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_25px_rgba(168,85,247,0.25)]">
+                  <div className="rounded-full bg-gradient-to-r from-[#2c2c2c] to-[#3a3a3a] px-8 py-4 font-bold text-lg text-white text-center">
                   {selectedAd.call_to_action}
+                  </div>
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
     </div>
+    
+    <Footer />
+  </>
   );
 };
 
@@ -634,26 +664,26 @@ interface ScoreCardProps {
 const ScoreCard: React.FC<ScoreCardProps> = ({ title, score, icon: Icon, description, className }) => {
   const percentage = score;
   return (
-    <div className={`bg-white rounded-xl p-6 shadow-lg border-2 ${className || ''}`}>
+    <div className="rounded-[32px] p-[2px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+      <div className={`bg-[#0B0F1A] rounded-[32px] p-6 ${className || ''}`}>
       <div className="flex items-center justify-between mb-3">
-        <Icon className="w-8 h-8 text-blue-600" />
-        <span className={`text-2xl font-bold px-3 py-1 rounded-lg ${
-          score >= 80 ? 'bg-emerald-100 text-emerald-800' : score >= 60 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
-        }`}>
+        <Icon className="w-8 h-8 text-cyan-400" />
+        <span className="text-2xl font-bold px-3 py-1 rounded-[32px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 bg-clip-text text-transparent">
           {score}/100
         </span>
       </div>
-      <h3 className="text-lg font-bold text-gray-900 mb-1">{title}</h3>
+      <h3 className="text-lg font-bold text-white mb-1">{title}</h3>
       {description && (
-        <p className="text-sm text-gray-600 mb-3">{description}</p>
+        <p className="text-sm text-gray-400 mb-3">{description}</p>
       )}
-      <div className="w-full bg-gray-200 rounded-full h-2">
+      <div className="w-full bg-gray-800 rounded-full h-2">
         <div
           className={`h-2 rounded-full transition-all ${
             score >= 80 ? 'bg-emerald-500' : score >= 60 ? 'bg-amber-500' : 'bg-red-500'
           }`}
           style={{ width: `${percentage}%` }}
         />
+      </div>
       </div>
     </div>
   );
@@ -669,14 +699,12 @@ interface MetricCardProps {
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value, icon: Icon, className, score }) => {
   return (
-    <div className={`bg-gray-50 rounded-lg p-4 border-2 ${className || 'border-gray-200'}`}>
+    <div className={`bg-black/50 rounded-[32px] p-4 border-2 border-gray-800 ${className || ''}`}>
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-5 h-5 text-blue-600" />
-        <span className="text-sm text-gray-600 font-medium">{label}</span>
+        <Icon className="w-5 h-5 text-cyan-400" />
+        <span className="text-sm text-gray-400 font-medium">{label}</span>
       </div>
-      <div className={`text-xl font-bold ${
-        score ? (score >= 70 ? 'text-emerald-600' : score >= 50 ? 'text-amber-600' : 'text-red-600') : 'text-gray-800'
-      }`}>
+      <div className="text-2xl font-bold bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 bg-clip-text text-transparent">
         {value}
       </div>
     </div>
