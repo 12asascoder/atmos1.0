@@ -1,25 +1,61 @@
 // AudienceStep.tsx
-import React, { useState, useEffect } from 'react';
-import { Users, TrendingUp, MapPin, Briefcase, Heart, Search, Save, Loader, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, TrendingUp, MapPin, Search, Save, AlertCircle, CheckCircle,Heart, Loader, Dumbbell, Trophy, Shirt, Cpu, Briefcase } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const AudienceStep = ({ campaignId, onSave, initialData }) => {
-  const [selectedDemographics, setSelectedDemographics] = useState([]);
-  const [selectedInterests, setSelectedInterests] = useState([]);
-  const [ageRange, setAgeRange] = useState([25, 45]);
-  const [targetLocations, setTargetLocations] = useState([]);
+interface Interest {
+  id: string;
+  label: string;
+  description: string;
+  audience_size: string;
+  growth_rate: string;
+}
+
+interface Location {
+  code: string;
+  name: string;
+  users: string;
+  growth: string;
+  regions?: string[];
+}
+
+interface Insights {
+  estimated_audience: string;
+  engagement_multiplier: string;
+  average_age: string;
+  peak_activity: string;
+  device_preference: string;
+}
+
+interface AudienceStepProps {
+  campaignId?: string;
+  onSave?: (campaignId: string) => void;
+  initialData?: {
+    demographics?: string[];
+    selected_interests?: Interest[];
+    age_range_min?: number;
+    age_range_max?: number;
+    target_locations?: Location[];
+  };
+}
+
+const AudienceStep = ({ campaignId, onSave, initialData }: AudienceStepProps) => {
+  const [selectedDemographics, setSelectedDemographics] = useState<string[]>([]);
+  const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
+  const [ageRange, setAgeRange] = useState<[number, number]>([25, 45]);
+  const [targetLocations, setTargetLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [insights, setInsights] = useState(null);
-  const [presetInterests, setPresetInterests] = useState([]);
-  const [presetLocations, setPresetLocations] = useState([]);
+  const [insights, setInsights] = useState<Insights | null>(null);
+  const [presetInterests, setPresetInterests] = useState<Interest[]>([]);
+  const [presetLocations, setPresetLocations] = useState<Location[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
 
   // Get token from localStorage
-  const [token, setToken] = useState(null);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
@@ -136,8 +172,8 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
     { id: 'all', label: 'All Genders', percentage: '100%' }
   ];
 
-  const toggleDemographic = (id) => {
-    let newDemographics;
+  const toggleDemographic = (id: string) => {
+    let newDemographics: string[];
     if (id === 'all') {
       newDemographics = ['all'];
     } else {
@@ -148,7 +184,7 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
     setSelectedDemographics(newDemographics);
   };
 
-  const toggleInterest = (interest) => {
+  const toggleInterest = (interest: Interest) => {
     setSelectedInterests(prev => {
       const exists = prev.find(item => item.id === interest.id);
       if (exists) {
@@ -159,7 +195,7 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
     });
   };
 
-  const toggleLocation = (location) => {
+  const toggleLocation = (location: Location) => {
     setTargetLocations(prev => {
       const exists = prev.find(item => item.name === location.name);
       if (exists) {
@@ -233,7 +269,15 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
     setSuccess(false);
     
     try {
-      const payload = {
+      const payload: {
+        demographics: string[];
+        age_range_min: number;
+        age_range_max: number;
+        selected_interests: Interest[];
+        target_locations: Location[];
+        user_id: string | null;
+        campaign_id?: string;
+      } = {
         demographics: selectedDemographics,
         age_range_min: ageRange[0],
         age_range_max: ageRange[1],
@@ -277,7 +321,7 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
 
   const filteredLocations = presetLocations.filter(location =>
     location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (location.regions && location.regions.some(region => 
+    (location.regions && location.regions.some((region: string) => 
       region.toLowerCase().includes(searchTerm.toLowerCase())
     ))
   );
@@ -289,23 +333,23 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800 mb-2">Audience Targeting</h2>
-          <p className="text-slate-600">Define your target audience and demographics for optimal campaign performance</p>
+          <h2 className="text-3xl font-bold text-white mb-2">Audience Targeting</h2>
+          <p className="text-white">Define your target audience and demographics for optimal campaign performance</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={saveAudienceData}
-          disabled={saving || !token}
-          className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-600 text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? (
-            <Loader className="w-5 h-5 animate-spin" />
-          ) : (
-            <Save className="w-5 h-5" />
-          )}
-          {saving ? 'Saving...' : 'Save Audience'}
-        </motion.button>
+        <div className="rounded-[32px] p-[1px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500">
+          <motion.button
+            onClick={saveAudienceData}
+            disabled={saving || !token}
+            className="px-6 py-3 bg-gray-900 text-white rounded-[32px] font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <Loader className="w-5 h-5 animate-spin" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            {saving ? 'Saving...' : 'Save Audience'}
+          </motion.button>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -328,250 +372,303 @@ const AudienceStep = ({ campaignId, onSave, initialData }) => {
       )}
 
       {/* Demographics Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <Users className="w-6 h-6 text-cyan-600" />
-          Demographics
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {demographics.map((demo) => (
-            <motion.button
-              key={demo.id}
-              onClick={() => toggleDemographic(demo.id)}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`p-4 rounded-xl border-2 transition-all ${
-                selectedDemographics.includes(demo.id)
-                  ? 'border-cyan-500 bg-gradient-to-br from-cyan-50 to-teal-50'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-700">{demo.label}</span>
-                <span className="text-sm text-cyan-600 font-medium">{demo.percentage}</span>
-              </div>
-            </motion.button>
-          ))}
-        </div>
-
-        {/* Age Range */}
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-slate-700 mb-3">
-            Age Range: {ageRange[0]} - {ageRange[1]} years
-          </label>
-          <div className="flex items-center gap-4">
-            <input
-              type="range"
-              min="18"
-              max="65"
-              value={ageRange[0]}
-              onChange={(e) => setAgeRange([parseInt(e.target.value), ageRange[1]])}
-              className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-cyan-600"
-            />
-            <input
-              type="range"
-              min="18"
-              max="65"
-              value={ageRange[1]}
-              onChange={(e) => setAgeRange([ageRange[0], parseInt(e.target.value)])}
-              className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-cyan-600"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Interests Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <Heart className="w-6 h-6 text-cyan-600" />
-          Interests & Behaviors
-        </h3>
-        
-        {dataLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-8 h-8 animate-spin text-cyan-600" />
-          </div>
-        ) : presetInterests.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            No interests available. Please check your connection.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {presetInterests.map((interest) => {
-              const Icon = Briefcase;
-              const isSelected = selectedInterests.some(item => item.id === interest.id);
-              
-              return (
+      <div className="mb-5">
+        <div className="bg-gray-900 rounded-[32px] p-8">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Users className="w-6 h-6 text-cyan-400" />
+            Demographics
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {demographics.map((demo) => (
+              <div key={demo.id} className="rounded-[32px] p-[1px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500">
                 <motion.button
-                  key={interest.id}
-                  onClick={() => toggleInterest(interest)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`p-6 rounded-xl border-2 transition-all text-left ${
-                    isSelected
-                      ? 'border-cyan-500 bg-gradient-to-br from-cyan-50 to-teal-50'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  onClick={() => toggleDemographic(demo.id)}
+                  className={`w-full p-4 rounded-[32px] transition-all ${
+                    selectedDemographics.includes(demo.id)
+                      ? 'bg-gradient-to-br from-cyan-900 to-teal-900'
+                      : 'bg-gray-800 hover:bg-gray-700'
                   }`}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0`}>
-                      <Icon className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-semibold text-slate-800 mb-1">{interest.label}</h4>
-                        <span className="text-sm font-medium text-emerald-600">{interest.growth_rate}</span>
-                      </div>
-                      <p className="text-sm text-slate-500 mb-2">{interest.description}</p>
-                      <p className="text-xs text-slate-400">Audience: {interest.audience_size}</p>
-                    </div>
-                    {isSelected && (
-                      <div className="w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-white">{demo.label}</span>
+                    <span className="text-sm text-cyan-400 font-medium">{demo.percentage}</span>
                   </div>
                 </motion.button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Locations Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <MapPin className="w-6 h-6 text-cyan-600" />
-          Geographic Targeting
-        </h3>
-        
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search countries, cities, or regions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {targetLocations.length > 0 && (
-          <div className="mb-6 p-4 bg-cyan-50 rounded-xl border border-cyan-200">
-            <h4 className="text-sm font-medium text-slate-700 mb-2">Selected Locations:</h4>
-            <p className="text-cyan-700 font-medium">{selectedLocationNames}</p>
-          </div>
-        )}
-
-        {dataLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-8 h-8 animate-spin text-cyan-600" />
-          </div>
-        ) : filteredLocations.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            No locations found matching "{searchTerm}"
-          </div>
-        ) : (
-          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-            {filteredLocations.map((location) => (
-              <motion.button
-                key={location.code}
-                onClick={() => toggleLocation(location)}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className={`w-full p-4 rounded-xl border transition-colors text-left ${
-                  targetLocations.some(loc => loc.name === location.name)
-                    ? 'border-cyan-500 bg-cyan-50'
-                    : 'border-slate-200 bg-slate-50 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center">
-                      <MapPin className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-slate-800">{location.name}</h4>
-                      <p className="text-sm text-slate-500">{location.users} potential reach</p>
-                      <p className="text-xs text-slate-400">
-                        {location.regions && location.regions.length > 0 
-                          ? `${location.regions.slice(0, 2).join(', ')}...`
-                          : 'Major cities available'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-emerald-600 text-sm font-medium">{location.growth}</span>
-                    <p className="text-xs text-slate-500">growth</p>
-                  </div>
-                </div>
-              </motion.button>
+              </div>
             ))}
           </div>
-        )}
+
+          {/* Age Range */}
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-white mb-3">
+              Age Range: {ageRange[0]} - {ageRange[1]} years
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min="18"
+                max="65"
+                value={ageRange[0]}
+                onChange={(e) => setAgeRange([parseInt(e.target.value), ageRange[1]])}
+                className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              />
+              <input
+                type="range"
+                min="18"
+                max="65"
+                value={ageRange[1]}
+                onChange={(e) => setAgeRange([ageRange[0], parseInt(e.target.value)])}
+                className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Insights Button */}
-      <div className="flex justify-center">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={getAudienceInsights}
-          disabled={loading || !selectedDemographics.length || !token}
-          className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-medium flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <Loader className="w-5 h-5 animate-spin" />
-          ) : (
-            <TrendingUp className="w-5 h-5" />
-          )}
-          {loading ? 'Analyzing...' : 'Get AI Audience Insights'}
-        </motion.button>
+     {/* Interests Section */}
+<div className="mb-5">
+  <div className="bg-gray-900 rounded-[32px] p-8">
+    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+      <Heart className="w-6 h-6 text-cyan-400" />
+      Interests & Behaviors
+    </h3>
+
+    {dataLoading ? (
+      <div className="flex items-center justify-center py-12">
+        <Loader className="w-8 h-8 animate-spin text-cyan-400" />
       </div>
+    ) : presetInterests.length === 0 ? (
+      <div className="text-center py-12 text-white">
+        No interests available. Please check your connection.
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {presetInterests.map((interest) => {
+          
+          // ✅ Proper Icon Mapping (No Logic Changed)
+          let Icon;
+          if (interest.label.toLowerCase().includes("fitness")) Icon = Dumbbell;
+          else if (interest.label.toLowerCase().includes("sports")) Icon = Trophy;
+          else if (interest.label.toLowerCase().includes("fashion")) Icon = Shirt;
+          else if (interest.label.toLowerCase().includes("tech")) Icon = Cpu;
+          else Icon = Briefcase;
+
+          const isSelected = selectedInterests.some(
+            (item) => item.id === interest.id
+          );
+
+          return (
+            <div
+              key={interest.id}
+              className="rounded-[32px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 p-[1px] overflow-hidden"
+            >
+              <motion.button
+                onClick={() => toggleInterest(interest)}
+                className={`w-full h-full p-6 rounded-[30px] text-left transition-colors duration-200 ${
+                  isSelected
+                    ? "bg-[#111827]"
+                    : "bg-[#1F2937] hover:bg-[#243040]"
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  
+                  {/* Icon Box */}
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-8 h-8 text-cyan-400" />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-semibold text-white mb-1">
+                        {interest.label}
+                      </h4>
+                      <span className="text-sm font-medium text-emerald-400">
+                        {interest.growth_rate}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-gray-300 mb-2">
+                      {interest.description}
+                    </p>
+
+                    <p className="text-xs text-gray-400">
+                      Audience: {interest.audience_size}
+                    </p>
+                  </div>
+
+                  {/* Selected Check */}
+                  {isSelected && (
+                    <div className="w-6 h-6 rounded-full bg-cyan-600 flex items-center justify-center flex-shrink-0">
+                      <svg
+                        className="w-4 h-4 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              </motion.button>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</div>
+
+      {/* Locations Section */}
+      <div className="mb-7">
+        <div className="bg-gray-900 rounded-[32px] p-8">
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <MapPin className="w-6 h-6 text-cyan-400" />
+            Geographic Targeting
+          </h3>
+          
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search countries, cities, or regions..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent placeholder-gray-400"
+              />
+            </div>
+          </div>
+
+          {targetLocations.length > 0 && (
+            <div className="mb-6 p-4 bg-cyan-900/30 rounded-xl border border-cyan-500">
+              <h4 className="text-sm font-medium text-white mb-2">Selected Locations:</h4>
+              <p className="text-cyan-400 font-medium">{selectedLocationNames}</p>
+            </div>
+          )}
+
+          {dataLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader className="w-8 h-8 animate-spin text-cyan-400" />
+            </div>
+          ) : filteredLocations.length === 0 ? (
+            <div className="text-center py-12 text-white">
+              No locations found matching "{searchTerm}"
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+              {filteredLocations.map((location) => (
+                <div key={location.code} className="rounded-[32px] p-[1px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500">
+                  <motion.button
+                    onClick={() => toggleLocation(location)}
+                    className={`w-full p-4 rounded-[32px] transition-colors text-left ${
+                      targetLocations.some(loc => loc.name === location.name)
+                        ? 'bg-gradient-to-br from-cyan-900 to-teal-900'
+                        : 'bg-gray-800 hover:bg-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+                          <MapPin className="w-6 h-6 text-cyan-400" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-white">{location.name}</h4>
+                          <p className="text-sm text-gray-300">{location.users} potential reach</p>
+                          <p className="text-xs text-gray-400">
+                            {location.regions && location.regions.length > 0 
+                              ? `${location.regions.slice(0, 2).join(', ')}...`
+                              : 'Major cities available'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-emerald-400 text-sm font-medium">{location.growth}</span>
+                        <p className="text-xs text-gray-300">growth</p>
+                      </div>
+                    </div>
+                  </motion.button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+{/* Insights Button */}
+<div className="flex justify-center mt-6">
+  <div className="inline-block rounded-[32px] p-[1.5px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500">
+    <motion.button
+      type="button"
+      onClick={() => getAudienceInsights()}
+      disabled={loading || !selectedDemographics.length || !token}
+      className="px-10 py-4 bg-black text-white rounded-[30px] font-medium flex items-center gap-3 justify-center disabled:bg-black disabled:text-white disabled:cursor-not-allowed"
+    >
+      {loading ? (
+        <Loader className="w-5 h-5 animate-spin text-white" />
+      ) : (
+        <TrendingUp className="w-5 h-5 text-white" />
+      )}
+      {loading ? "Analyzing..." : "Get AI Audience Insights"}
+    </motion.button>
+  </div>
+</div>
 
       {/* AI Insights */}
       {insights && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-cyan-50 to-teal-50 border border-cyan-200 rounded-2xl p-6"
-        >
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <h4 className="text-lg font-semibold text-slate-800 mb-2">AI Audience Insights</h4>
-              <p className="text-slate-700 mb-3">
-                Based on your selections, we've identified an audience of{' '}
-                <strong className="text-cyan-700">{insights.estimated_audience} users</strong>{' '}
-                with high purchase intent. This audience has shown{' '}
-                <strong className="text-cyan-700">{insights.engagement_multiplier}x higher engagement</strong>{' '}
-                with similar campaigns.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
-                  Avg. Age: {insights.average_age}
-                </span>
-                <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
-                  Peak Activity: {insights.peak_activity}
-                </span>
-                <span className="px-3 py-1 bg-white rounded-full text-sm text-slate-700 border border-cyan-200">
-                  Device: {insights.device_preference}
-                </span>
+        <div className="rounded-[32px] p-[1px] bg-gradient-to-r from-cyan-400 via-violet-500 to-pink-500 mt-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gray-900 rounded-[32px] p-6"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-6 h-6 text-white" />
+              </div>
+
+              <div className="flex-1">
+                <h4 className="text-lg font-semibold text-white mb-2">
+                  AI Audience Insights
+                </h4>
+
+                <p className="text-gray-300 mb-3">
+                  Based on your selections, we've identified an audience of{' '}
+                  <strong className="text-cyan-400">
+                    {insights.estimated_audience} users
+                  </strong>{' '}
+                  with high purchase intent. This audience has shown{' '}
+                  <strong className="text-cyan-400">
+                    {insights.engagement_multiplier}x higher engagement
+                  </strong>{' '}
+                  with similar campaigns.
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-white border border-cyan-500">
+                    Avg. Age: {insights.average_age}
+                  </span>
+
+                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-white border border-cyan-500">
+                    Peak Activity: {insights.peak_activity}
+                  </span>
+
+                  <span className="px-3 py-1 bg-gray-800 rounded-full text-sm text-white border border-cyan-500">
+                    Device: {insights.device_preference}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       )}
     </div>
   );
-};
+}
 
 export default AudienceStep;
